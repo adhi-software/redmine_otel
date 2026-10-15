@@ -1,0 +1,7 @@
+gem 'opentelemetry-sdk'
+gem 'opentelemetry-exporter-otlp'
+gem 'opentelemetry-exporter-zipkin'
+gem 'opentelemetry-instrumentation-rails'
+gem 'opentelemetry-instrumentation-pg'
+gem 'opentelemetry-instrumentation-net_http'
+gem 'opentelemetry-instrumentation-faraday'

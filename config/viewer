@@ -1,0 +1,29 @@
+#!/usr/bin/env ruby
+# Installs and runs the trace viewers offered under Server hosting, as native
+# processes without Docker. The settings page runs this for its Start button.
+# Usage: plugins/redmine_observability/config/viewer <viewer> [install|start|stop|status]
+
+require_relative '../lib/redmine_observability/viewers'
+
+viewers = RedmineObservability::Viewers
+viewer = viewers::ALL[ARGV[0]]
+action = ARGV[1] || 'start'
+unless viewer && %w[install start stop status].include?(action)
+  warn "Usage: #{$PROGRAM_NAME} <#{viewers::ALL.keys.join('|')}> [install|start|stop|status]"
+  exit 1
+end
+
+begin
+  case action
+  when 'install' then viewer.packages.each { viewers.install(_1) }
+  when 'start' then viewers.start(viewer)
+  when 'stop' then viewers.stop(viewer)
+  when 'status'
+    status = viewers.status(viewer)
+    puts status
+    exit(status == :running ? 0 : 3)
+  end
+rescue viewers::Error => e
+  warn e.message
+  exit 1
+end
