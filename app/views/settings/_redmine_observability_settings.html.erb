@@ -11,6 +11,7 @@
   end
   recorded_types = destination_options.map { |_, text| destinations::Row.parse(text).type }
   hosted = Array(settings['hosted_viewers']).filter_map { viewers::ALL[_1] }
+  jaeger = viewers::ALL['jaeger']
 %>
 
 <% unless RedmineObservability.pipeline %>
@@ -37,11 +38,9 @@
 <fieldset>
   <legend><%= l(:label_observability_hosting) %></legend>
   <p>
-    <label for="settings_hosted_viewers"><%= l(:label_observability_viewers) %></label>
+    <label for="settings_hosted_viewers"><%= l(:label_observability_host_jaeger) %></label>
     <%= hidden_field_tag 'settings[hosted_viewers][]', '', id: nil %>
-    <%= select_tag 'settings[hosted_viewers][]',
-          options_for_select(viewers::ALL.values.map { [_1.label, _1.key] }, hosted.map(&:key)),
-          multiple: true, size: viewers::ALL.size, id: 'settings_hosted_viewers', class: 'observability-list' %>
+    <%= check_box_tag 'settings[hosted_viewers][]', jaeger.key, hosted.include?(jaeger), id: 'settings_hosted_viewers' %>
     <em class="info"><%= l(:text_observability_viewers) %></em>
   </p>
 
@@ -52,7 +51,6 @@
           <th><%= l(:label_observability_viewer) %></th>
           <th><%= l(:field_status) %></th>
           <th><%= l(:label_observability_receives_at) %></th>
-          <th><%= l(:label_observability_login) %></th>
           <th></th>
         </tr>
       </thead>
@@ -66,13 +64,6 @@
               <code><%= viewer.receives %></code>
               <% unless recorded_types.include?(viewer.key) %>
                 <em class="info"><%= l(:text_observability_not_recorded) %></em>
-              <% end %>
-            </td>
-            <td>
-              <% if viewer.key == 'openobserve' %>
-                <%= viewers.openobserve_login.join(' / ') %>
-              <% elsif viewer.key == 'grafana-tempo' %>
-                <%= l(:text_observability_grafana_login) %>
               <% end %>
             </td>
             <td class="buttons">
@@ -96,7 +87,7 @@
       <th><label for="observability_type"><%= l(:field_type) %></label></th>
       <td>
         <%= select_tag 'observability_type',
-              options_for_select(destinations.types.map { |type|
+              options_for_select(destinations::TYPES.map { |type|
                 [type.label, type.key, { 'data-endpoint' => type.endpoint, 'data-headers' => type.headers }]
               }), name: nil %>
       </td>

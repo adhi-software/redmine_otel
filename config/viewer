@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
-# Installs and runs the trace viewers offered under Server hosting, as native
-# processes without Docker. The settings page runs this for its Start button.
+# Installs and runs Jaeger, the trace viewer offered under Server hosting, as a
+# native process without Docker. The settings page runs this for its Start button.
 # Usage: plugins/redmine_observability/config/viewer <viewer> [install|start|stop|status]
 
 require_relative '../lib/redmine_observability/viewers'

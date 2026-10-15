@@ -1,10 +1,10 @@
 # Redmine Observability
 
-A plugin that records request, SQL and outgoing HTTP traces with [OpenTelemetry](https://opentelemetry.io) and sends them to one or more tracing backends at once, such as Jaeger, Zipkin, Grafana Tempo, OpenObserve, New Relic or Honeycomb. A backend only receives traces while it is running, in one of three places:
+A plugin that records request, SQL and outgoing HTTP traces with [OpenTelemetry](https://opentelemetry.io) and sends them to one or more tracing backends at once, such as Jaeger, Zipkin, Grafana Tempo, OpenObserve, New Relic or Honeycomb. A backend only receives traces while it is running:
 
-- on the Redmine server, where the plugin can host Jaeger, Zipkin, OpenObserve, otel-desktop-viewer and Grafana Tempo without Docker (see [Server hosting](#server-hosting))
-- on another machine you run
-- as a cloud service, such as New Relic or Honeycomb
+- Jaeger can be hosted by the plugin on the Redmine server, without Docker (see [Server hosting](#server-hosting)).
+- Any other backend, such as Zipkin, Grafana Tempo or OpenObserve, you install and run yourself, on this server or another machine, then add as a destination.
+- A cloud service, such as New Relic or Honeycomb, only needs a destination with your API key.
 
 The Redmine API key that the mobile client sends as `?key=` is replaced with `[REDACTED]` before any trace leaves Redmine.
 
@@ -32,32 +32,28 @@ Add a row to **Destinations** for every backend that should receive traces; each
 |------|------------------|---------|
 | Jaeger | `http://localhost:4318/v1/traces` | |
 | Zipkin | `http://localhost:9411/api/v2/spans` (Zipkin protocol) | |
-| OpenObserve | `http://localhost:5080/api/default/v1/traces` | Filled in with the login of the instance hosted here |
-| otel-desktop-viewer | `http://localhost:4328/v1/traces` | |
-| Grafana Tempo | `http://localhost:4338/v1/traces` | |
+| OpenObserve | `http://localhost:5080/api/default/v1/traces` | `Authorization=Basic <Base64 of email:password>` |
+| otel-desktop-viewer | `http://localhost:4318/v1/traces` | |
+| Grafana Tempo | `http://localhost:4318/v1/traces` | |
 | New Relic | `https://otlp.nr-data.net/v1/traces` | `api-key=<license key>` |
 | Honeycomb | `https://api.honeycomb.io/v1/traces` | `x-honeycomb-team=<API key>` |
 | Other OTLP backend | The backend's OTLP/HTTP traces URL | As the backend documents, e.g. for a Datadog Agent, Grafana Cloud, SigNoz or Elastic |
+
+The endpoints are each backend's usual local address; change the host or port to wherever yours runs. Jaeger, otel-desktop-viewer and Grafana Tempo all use port 4318 by default, so only one of them can have it on a machine.
 
 Headers are comma-separated `key=value` pairs. They are hidden in the list and filtered from the Redmine log.
 
 ## Server hosting
 
-Select the viewers to run on this server and click **Apply**. Saving starts the newly selected ones and stops the ones you removed. The table under the list shows each viewer's status, the address it receives traces at, and Start/Stop buttons; the viewer name opens its UI.
+Tick **Host Jaeger** and click **Apply** to run Jaeger on this server; untick it to stop Jaeger. The table under it shows Jaeger's status, the address it receives traces at and a Start/Stop button; the name opens the Jaeger UI on port 16686. Add a Jaeger destination so traces reach it.
 
-The first start downloads the viewer into `~/.local/share/<viewer>/<version>` and checks it against the SHA-256 its project publishes, so it can take a few minutes. Logs go to `log/<viewer>.log` and data to `tmp/observability/<viewer>`. Viewers keep running when Redmine restarts; after the machine restarts, click **Start**.
+The first start downloads Jaeger into `~/.local/share/jaeger/<version>` and checks it against the SHA-256 the Jaeger project publishes. Logs go to `log/jaeger.log`. Jaeger keeps running when Redmine restarts; after the machine restarts, click **Start**. Traces are kept in memory, so they are lost when Jaeger stops.
 
-| Viewer | UI | Receives traces at | Notes |
-|--------|----|--------------------|-------|
-| Jaeger | `:16686` | OTLP `:4318` | Traces kept in memory |
-| Zipkin | `:9411` | Zipkin `:9411` | Needs Java 17 or newer; traces kept in memory |
-| OpenObserve | `:5080` | OTLP `:5080` | Root login is generated on first start and shown on the settings page |
-| otel-desktop-viewer | `:8000` | OTLP `:4328` | Listens on localhost only; traces kept in memory |
-| Grafana Tempo | Grafana `:3300` | OTLP `:4338` | Grafana login `admin` / `admin`, changed at first login; about 500 MB to download |
+Jaeger has no login. On a server reachable from other machines, keep its ports behind a firewall or a proxy.
 
-Jaeger, Zipkin and Tempo have no login. On a server reachable from other machines, keep their ports behind a firewall or a proxy.
+To use another backend, instead of Jaeger or as well as it, install and run it yourself and add it under **Destinations**.
 
-The same viewers can be run from the command line:
+Jaeger can also be run from the command line:
 
 ```sh
 plugins/redmine_observability/config/viewer jaeger start     # also: stop, status, install
@@ -69,13 +65,13 @@ plugins/redmine_observability/config/viewer jaeger start     # also: stop, statu
 |----------|---------|
 | `OTEL_SERVICE_NAME` | Name shown in the tracing backends; `redmine-erpmine` when not set. |
 | `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | Keep only part of the traces in production, e.g. `parentbased_traceidratio` and `0.1`. |
-| `OBSERVABILITY_HOME` | Where hosted viewers are installed; `~/.local/share` when not set. |
+| `OBSERVABILITY_HOME` | Where the hosted Jaeger is installed; `~/.local/share` when not set. |
 
 ## Uninstallation
 
-- Remove every viewer under **Server hosting** and click **Apply**, so the hosted viewers stop.
+- Untick **Host Jaeger** under **Server hosting** and click **Apply**, so Jaeger stops.
 - Remove the line from `config/additional_environment.rb`, delete `plugins/redmine_observability`, run `bundle install` and restart Redmine.
-- Optionally delete the downloaded viewers in `~/.local/share` and their data in `tmp/observability`.
+- Optionally delete the downloaded Jaeger in `~/.local/share/jaeger` and `tmp/observability`.
 
 ## Compatibility Matrix
 

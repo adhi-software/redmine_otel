@@ -33,7 +33,8 @@ module RedmineObservability
     end
   end
 
-  # Saving the settings starts newly hosted viewers and stops removed ones.
+  # Saving the settings starts Jaeger when Host Jaeger is ticked and stops it
+  # when it is not.
   module SettingsControllerPatch
     def plugin
       return super unless request.post? && params[:id] == 'redmine_observability'
@@ -42,12 +43,7 @@ module RedmineObservability
       super
       hosted = RedmineObservability.hosted_viewers
       (before - hosted).each { Viewers.stop(_1) }
-      problems = hosted.filter_map do |viewer|
-        next if Viewers.status(viewer) != :stopped
-
-        Viewers.missing_requirement(viewer).tap { Viewers.start_in_background(viewer) unless _1 }
-      end
-      flash[:error] = problems.join('. ') if problems.any?
+      hosted.each { Viewers.start_in_background(_1) if Viewers.status(_1) == :stopped }
     end
   end
 end

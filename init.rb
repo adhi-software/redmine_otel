@@ -18,7 +18,7 @@ filters << :destinations unless filters.include?(:destinations)
 Redmine::Plugin.register :redmine_observability do
   name 'Redmine Observability'
   author 'Adhi Software Pvt Ltd'
-  description 'Sends request, SQL and HTTP traces to one or more tracing backends, and hosts trace viewers such as Jaeger'
+  description 'Sends request, SQL and HTTP traces to one or more tracing backends, and can host Jaeger on the Redmine server'
   version '1.1.0'
   requires_redmine version_or_higher: '6.0.0'
   author_url 'http://www.adhisoftware.co.in/'
