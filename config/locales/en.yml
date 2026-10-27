@@ -2,23 +2,11 @@ en:
   label_observability_recording: Recording and tracing
   label_observability_destinations: Destinations
   label_observability_destination: Destination
+  label_observability_format: Format
   label_observability_endpoint: Endpoint
   label_observability_headers: Headers
-  label_observability_hosting: Server hosting
-  label_observability_host_jaeger: Host Jaeger
-  label_observability_viewer: Viewer
-  label_observability_receives_at: Receives traces at
-  label_observability_running: Running
-  label_observability_starting: Starting
-  label_observability_stopped: Stopped
-  button_observability_start: Start
-  button_observability_stop: Stop
-  text_observability_destinations: Every request, SQL query and outgoing HTTP call is sent to each destination. Changes apply without a restart.
+  text_observability_destinations: Every request, SQL query and outgoing HTTP call is sent to each destination. Install and run the tracing backend yourself, then add its URL here. Changes apply without a restart.
   text_observability_headers: "Comma-separated key=value pairs, e.g. api-key=YOUR_KEY"
-  text_observability_viewers: Runs Jaeger on this server without Docker. Saving starts or stops it; the first start downloads Jaeger, which can take a minute. For any other backend, install it yourself and add it under Destinations.
-  text_observability_not_recorded: No destination sends here.
   text_observability_select_row: Select a destination first.
   text_observability_invalid_endpoint: Enter an endpoint URL that starts with http:// or https://.
   text_observability_not_loaded: "Tracing is off because the plugin initializer is not loaded. Add config.paths['config/initializers'] << 'plugins/redmine_observability/config/initializers' to config/additional_environment.rb and restart Redmine."
-  notice_observability_viewer_starting: "%{viewer} is starting. Refresh this page to see its status."
-  notice_observability_viewer_stopped: "%{viewer} stopped."

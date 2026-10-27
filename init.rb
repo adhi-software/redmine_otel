@@ -6,32 +6,29 @@
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
 
-# Tracing starts from config/initializers/opentelemetry.rb, which
-# config/additional_environment.rb loads with the Rails initializers.
+# Tracing starts in config/initializers/opentelemetry.rb, not here.
 
 require_relative 'lib/redmine_observability'
+# Already done by the initializer when it is loaded.
+RedmineObservability.load_extensions
 
-# Destination rows carry API keys in their headers; keep them out of the logs.
+# Destination headers hold API keys; keep them out of the logs.
 filters = Rails.application.config.filter_parameters
 filters << :destinations unless filters.include?(:destinations)
 
 Redmine::Plugin.register :redmine_observability do
   name 'Redmine Observability'
   author 'Adhi Software Pvt Ltd'
-  description 'Sends request, SQL and HTTP traces to one or more tracing backends, and can host Jaeger on the Redmine server'
-  version '1.1.0'
-  requires_redmine version_or_higher: '6.0.0'
+  description 'Sends request, SQL and HTTP traces to one or more tracing backends'
+  version '1.0'
   author_url 'http://www.adhisoftware.co.in/'
 
-  settings partial: 'settings/redmine_observability_settings', default: {
-    # Rows of "type|endpoint|headers"; every span goes to each one.
-    'destinations' => [],
-    # Keys of RedmineObservability::Viewers::ALL to run on this server.
-    'hosted_viewers' => []
+  settings partial: 'settings/observability', default: {
+    # JSON rows of name, format, endpoint and headers; every span goes to each one.
+    'destinations' => []
   }
 end
 
 Setting.singleton_class.prepend(RedmineObservability::SettingCachePatch)
-SettingsController.prepend(RedmineObservability::SettingsControllerPatch)
 
-Rails.application.config.after_initialize { RedmineObservability.refresh }
+Rails.application.config.after_initialize { RedmineObservability.apply_destinations }

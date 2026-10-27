@@ -1,83 +1,90 @@
 # Redmine Observability
 
-A plugin that records request, SQL and outgoing HTTP traces with [OpenTelemetry](https://opentelemetry.io) and sends them to one or more tracing backends at once, such as Jaeger, Zipkin, Grafana Tempo, OpenObserve, New Relic or Honeycomb. A backend only receives traces while it is running:
-
-- Jaeger can be hosted by the plugin on the Redmine server, without Docker (see [Server hosting](#server-hosting)).
-- Any other backend, such as Zipkin, Grafana Tempo or OpenObserve, you install and run yourself, on this server or another machine, then add as a destination.
-- A cloud service, such as New Relic or Honeycomb, only needs a destination with your API key.
-
-The Redmine API key that the mobile client sends as `?key=` is replaced with `[REDACTED]` before any trace leaves Redmine.
+Records request, SQL and outgoing HTTP traces with [OpenTelemetry](https://opentelemetry.io) and sends them to one or more tracing backends, such as Jaeger, Zipkin, Grafana Tempo, OpenObserve, New Relic or Honeycomb.
 
 ## Installation
 
-- Extract the plugin into the `redmine/plugins` directory as `redmine_observability`.
+1. Copy the plugin to `redmine/plugins/redmine_observability` and run `bundle install`.
+2. Add this line to `config/additional_environment.rb` (create the file if needed), so tracing starts with Rails:
+   ```ruby
+   config.paths['config/initializers'] << 'plugins/redmine_observability/config/initializers'
+   ```
+3. Restart Redmine.
 
-- Install the gems
-  ```sh
-  bundle install
-  ```
+The tracing backend is installed separately. For example, download [Jaeger](https://www.jaegertracing.io/download/) and run `./jaeger`; its UI opens at `http://localhost:16686`. Then open **Administration → Plugins → Redmine Observability → Configure** and add the backend under **Destinations**: any name, its format and its endpoint. Usual endpoints:
 
-- Add this line to `config/additional_environment.rb` (create the file if it does not exist). The tracing setup must load with the Rails initializers; a plugin's `init.rb` runs too late.
-  ```ruby
-  config.paths['config/initializers'] << 'plugins/redmine_observability/config/initializers'
-  ```
+| Backend | Format | Endpoint | Headers |
+|---------|--------|----------|---------|
+| Jaeger, Grafana Tempo, otel-desktop-viewer | OTLP | `http://localhost:4318/v1/traces` | |
+| OpenObserve | OTLP | `http://localhost:5080/api/default/v1/traces` | `Authorization=Basic <base64 user:password>` |
+| New Relic | OTLP | `https://otlp.nr-data.net/v1/traces` | `api-key=<license key>` |
+| Honeycomb | OTLP | `https://api.honeycomb.io/v1/traces` | `x-honeycomb-team=<API key>` |
+| Zipkin | Zipkin | `http://localhost:9411/api/v2/spans` | |
 
-- Restart Redmine, then open **Administration → Plugins → Redmine Observability → Configure**.
-
-## Recording and tracing
-
-Add a row to **Destinations** for every backend that should receive traces; each one gets every span. Choosing a type fills in its usual endpoint and headers. Changes apply without a restart, and tracing is off while the list is empty.
-
-| Type | Default endpoint | Headers |
-|------|------------------|---------|
-| Jaeger | `http://localhost:4318/v1/traces` | |
-| Zipkin | `http://localhost:9411/api/v2/spans` (Zipkin protocol) | |
-| OpenObserve | `http://localhost:5080/api/default/v1/traces` | `Authorization=Basic <Base64 of email:password>` |
-| otel-desktop-viewer | `http://localhost:4318/v1/traces` | |
-| Grafana Tempo | `http://localhost:4318/v1/traces` | |
-| New Relic | `https://otlp.nr-data.net/v1/traces` | `api-key=<license key>` |
-| Honeycomb | `https://api.honeycomb.io/v1/traces` | `x-honeycomb-team=<API key>` |
-| Other OTLP backend | The backend's OTLP/HTTP traces URL | As the backend documents, e.g. for a Datadog Agent, Grafana Cloud, SigNoz or Elastic |
-
-The endpoints are each backend's usual local address; change the host or port to wherever yours runs. Jaeger, otel-desktop-viewer and Grafana Tempo all use port 4318 by default, so only one of them can have it on a machine.
-
-Headers are comma-separated `key=value` pairs. They are hidden in the list and filtered from the Redmine log.
-
-## Server hosting
-
-Tick **Host Jaeger** and click **Apply** to run Jaeger on this server; untick it to stop Jaeger. The table under it shows Jaeger's status, the address it receives traces at and a Start/Stop button; the name opens the Jaeger UI on port 16686. Add a Jaeger destination so traces reach it.
-
-The first start downloads Jaeger into `~/.local/share/jaeger/<version>` and checks it against the SHA-256 the Jaeger project publishes. Logs go to `log/jaeger.log`. Jaeger keeps running when Redmine restarts; after the machine restarts, click **Start**. Traces are kept in memory, so they are lost when Jaeger stops.
-
-Jaeger has no login. On a server reachable from other machines, keep its ports behind a firewall or a proxy.
-
-To use another backend, instead of Jaeger or as well as it, install and run it yourself and add it under **Destinations**.
-
-Jaeger can also be run from the command line:
-
-```sh
-plugins/redmine_observability/config/viewer jaeger start     # also: stop, status, install
-```
-
-## Configuration
-
-| Variable | Purpose |
-|----------|---------|
-| `OTEL_SERVICE_NAME` | Name shown in the tracing backends; `redmine-erpmine` when not set. |
-| `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | Keep only part of the traces in production, e.g. `parentbased_traceidratio` and `0.1`. |
-| `OBSERVABILITY_HOME` | Where the hosted Jaeger is installed; `~/.local/share` when not set. |
+In Jaeger, search with the tag `error=true` to find failed requests, or sort by **Longest First** to find slow ones.
 
 ## Uninstallation
 
-- Untick **Host Jaeger** under **Server hosting** and click **Apply**, so Jaeger stops.
-- Remove the line from `config/additional_environment.rb`, delete `plugins/redmine_observability`, run `bundle install` and restart Redmine.
-- Optionally delete the downloaded Jaeger in `~/.local/share/jaeger` and `tmp/observability`.
+Remove the line from `config/additional_environment.rb`, delete `plugins/redmine_observability`, run `bundle install` and restart Redmine. Stop the tracing backend if nothing else uses it.
 
 ## Compatibility Matrix
 
 | Redmine Version | Plugin Version |
 |-----------------|----------------|
-| 7.0.x           | 1.0          |
+| 7.0.x           | 1.0            |
+
+## Extensions
+
+Extend the plugin by adding files under `lib/redmine_observability/` instead of editing it. Each file defines one constant named after the file, e.g. `signoz.rb` defines `Signoz`. Restart Redmine after adding or changing a file. A file that fails to load is skipped and logged. Back up your files before upgrading the plugin.
+
+| Folder | The file defines | Effect |
+|--------|------------------|--------|
+| `destinations/` | a `Destinations::Format` | Adds a format, or replaces the built-in format with the same key |
+| `span_processors/` | a class with `on_start` and/or `on_finish` | Runs on every span; its errors are logged, not raised |
+| `instrumentations/` | an `Instrumentations::Config` | Sets options for one instrumentation |
+
+```ruby
+# lib/redmine_observability/destinations/console.rb
+module RedmineObservability
+  module Destinations
+    # Prints spans to Redmine's standard output, ignoring the endpoint.
+    Console = Format.new(key: 'console', label: 'Console', endpoint: 'http://localhost/',
+                         exporter: ->(_endpoint, _headers) { OpenTelemetry::SDK::Trace::Export::ConsoleSpanExporter.new })
+  end
+end
+
+# lib/redmine_observability/span_processors/add_environment.rb
+module RedmineObservability
+  module SpanProcessors
+    class AddEnvironment
+      def on_start(span, _parent_context)
+        span.set_attribute('deployment.environment', Rails.env)
+      end
+    end
+  end
+end
+
+# lib/redmine_observability/instrumentations/pg.rb
+module RedmineObservability
+  module Instrumentations
+    # Leaves SQL text out of the traces.
+    Pg = Config.new(name: 'OpenTelemetry::Instrumentation::PG', options: { db_statement: :omit })
+  end
+end
+```
+
+- A format's `exporter:` is a proc that takes the endpoint and headers and returns a span exporter; `endpoint:` is the example shown in the dialog. The built-in formats are OTLP and Zipkin.
+- Set span attributes in `on_start`; a span is read-only by `on_finish`. Use Redmine models only inside the callbacks, since they are not loaded when the file is read.
+- To add an instrumentation, list its gem in `plugins/redmine_observability/PluginGemfile`, run `bundle install` and restart Redmine.
+
+Another plugin can register destination formats and span processors from its own `init.rb`:
+
+```ruby
+RedmineObservability.add_destination_format(RedmineObservability::Destinations::Format.new(key: 'my_format', label: 'My format', endpoint: 'http://localhost:4318/v1/traces', exporter: ->(endpoint, headers) { MyPluginExporter.new(endpoint, headers) }))
+RedmineObservability.add_span_processor(MyPluginSpanProcessor.new)
+```
+
+Instrumentation options only work from `instrumentations/`, because tracing starts before any plugin's `init.rb` runs.
 
 ---
 

@@ -1,47 +1,49 @@
+require 'json'
 require 'uri'
-require_relative 'viewers'
 
 module RedmineObservability
-  # Backends offered under Recording and tracing, each with its usual endpoint.
-  # Jaeger can be hosted here; the admin installs and runs the others. A saved
-  # row is "type|endpoint|headers", headers written as key=value pairs joined
-  # by commas.
+  # A row is JSON with name, format, endpoint and headers; more formats can be added in destinations/.
   module Destinations
-    Type = Struct.new(:key, :label, :protocol, :endpoint, :headers, keyword_init: true)
+    # How spans are sent: +exporter+ is a proc (endpoint, headers) -> span exporter; +endpoint+ is an example.
+    Format = Struct.new(:key, :label, :endpoint, :exporter, keyword_init: true)
 
-    Row = Struct.new(:type, :endpoint, :headers) do
-      def self.parse(text) = new(*text.to_s.split('|', 3).map(&:strip))
+    # Rows saved before formats are "type|endpoint|headers" or JSON with a type; only Zipkin's type wasn't OTLP.
+    Row = Struct.new(:name, :format, :endpoint, :headers) do
+      def self.parse(text)
+        text = text.to_s
+        data = text.start_with?('{') ? JSON.parse(text) : %w[type endpoint headers].zip(text.split('|', 3)).to_h
+        data['format'] ||= data['type'] == 'zipkin' ? 'zipkin' : 'otlp'
+        new(*data.values_at(*members.map(&:to_s)).map { _1.to_s.strip })
+      end
     end
 
-    TYPES = [
-      Type.new(key: 'jaeger', label: 'Jaeger', protocol: :otlp, endpoint: Viewers::ALL['jaeger'].receives, headers: ''),
-      Type.new(key: 'zipkin', label: 'Zipkin', protocol: :zipkin,
-               endpoint: 'http://localhost:9411/api/v2/spans', headers: ''),
-      Type.new(key: 'openobserve', label: 'OpenObserve', protocol: :otlp,
-               endpoint: 'http://localhost:5080/api/default/v1/traces', headers: 'Authorization=Basic '),
-      Type.new(key: 'otel-desktop-viewer', label: 'otel-desktop-viewer', protocol: :otlp,
-               endpoint: 'http://localhost:4318/v1/traces', headers: ''),
-      Type.new(key: 'grafana-tempo', label: 'Grafana Tempo', protocol: :otlp,
-               endpoint: 'http://localhost:4318/v1/traces', headers: ''),
-      Type.new(key: 'new_relic', label: 'New Relic', protocol: :otlp,
-               endpoint: 'https://otlp.nr-data.net/v1/traces', headers: 'api-key='),
-      Type.new(key: 'honeycomb', label: 'Honeycomb', protocol: :otlp,
-               endpoint: 'https://api.honeycomb.io/v1/traces', headers: 'x-honeycomb-team='),
-      Type.new(key: 'otlp', label: 'Other OTLP backend', protocol: :otlp, endpoint: '', headers: '')
+    FORMATS = [
+      Format.new(key: 'otlp', label: 'OTLP', endpoint: 'http://localhost:4318/v1/traces',
+                 exporter: ->(endpoint, headers) { OpenTelemetry::Exporter::OTLP::Exporter.new(endpoint: endpoint, headers: headers) }),
+      Format.new(key: 'zipkin', label: 'Zipkin', endpoint: 'http://localhost:9411/api/v2/spans',
+                 exporter: ->(endpoint, headers) { OpenTelemetry::Exporter::Zipkin::Exporter.new(endpoint: endpoint, headers: headers) })
     ].freeze
 
-    def self.type(key) = TYPES.find { _1.key == key }
+    @added_formats = [].freeze
 
-    def self.label(key) = type(key)&.label || key
+    # Adds +format+, or replaces the built-in format with its key.
+    def self.add_format(format)
+      @added_formats = [*@added_formats.reject { _1.key == format.key }, format].freeze
+    end
+
+    # FORMATS, then the added formats.
+    def self.formats
+      added = @added_formats.to_h { [_1.key, _1] }
+      [*FORMATS.map { added.delete(_1.key) || _1 }, *added.values]
+    end
+
+    def self.find_format(key) = formats.find { _1.key == key }
+
+    def self.label(key) = find_format(key)&.label || key
 
     def self.processor(row)
-      headers = parse_headers(row.headers)
-      exporter = if type(row.type)&.protocol == :zipkin
-                   OpenTelemetry::Exporter::Zipkin::Exporter.new(endpoint: row.endpoint, headers: headers)
-                 else
-                   OpenTelemetry::Exporter::OTLP::Exporter.new(endpoint: row.endpoint, headers: headers)
-                 end
-      OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor.new(exporter)
+      exporter = find_format(row.format)&.exporter || raise(ArgumentError, "unknown format #{row.format}")
+      OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor.new(exporter.call(row.endpoint, parse_headers(row.headers)))
     end
 
     # Splits on the first "=" only, so Base64 padding in a value survives.

@@ -1,9 +1,7 @@
 require_relative 'destinations'
 
 module RedmineObservability
-  # Span processor that hands every span to one BatchSpanProcessor per
-  # destination row. #update swaps that set while Redmine runs, so a change on
-  # the settings page applies without a restart.
+  # Sends every span to one BatchSpanProcessor per destination; #update swaps them live.
   class ExportPipeline
     def initialize
       @rows = nil
@@ -13,8 +11,7 @@ module RedmineObservability
 
     def empty? = @processors.empty?
 
-    # Returns false when +rows+ are already applied. Replaced processors flush
-    # their queued spans on a background thread, off the request.
+    # False when +rows+ are unchanged; old processors flush in the background.
     def update(rows)
       @mutex.synchronize do
         return false if rows == @rows
@@ -38,9 +35,11 @@ module RedmineObservability
     private
 
     def build(text)
-      Destinations.processor(Destinations::Row.parse(text))
+      row = Destinations::Row.parse(text)
+      Destinations.processor(row)
     rescue StandardError => e
-      OpenTelemetry.handle_error(exception: e, message: "redmine_observability: skipped destination #{text.split('|', 2).first}")
+      # Names the row, never the whole text, whose headers hold API keys.
+      OpenTelemetry.handle_error(exception: e, message: "redmine_observability: skipped destination #{row&.name.presence || row&.format}")
       nil
     end
 

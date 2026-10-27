@@ -1,17 +1,12 @@
 <%
   destinations = RedmineObservability::Destinations
-  viewers = RedmineObservability::Viewers
-  # Each option's value is the full saved row, so it round-trips on save; the
-  # text hides the headers, which usually hold an API key.
+  # Value is the row as JSON, so older rows are converted on save; the text hides the headers, which hold API keys.
   destination_options = Array(settings['destinations']).reject(&:blank?).map do |text|
     row = destinations::Row.parse(text)
-    label = [destinations.label(row.type), row.endpoint].join('  |  ')
+    label = [row.name.presence, destinations.label(row.format), row.endpoint].compact.join('  |  ')
     label += '  |  ****' if row.headers.present?
-    [label, text]
+    [label, row.to_h.to_json]
   end
-  recorded_types = destination_options.map { |_, text| destinations::Row.parse(text).type }
-  hosted = Array(settings['hosted_viewers']).filter_map { viewers::ALL[_1] }
-  jaeger = viewers::ALL['jaeger']
 %>
 
 <% unless RedmineObservability.pipeline %>
@@ -22,10 +17,10 @@
   <legend><%= l(:label_observability_recording) %></legend>
   <p>
     <label for="settings_destinations"><%= l(:label_observability_destinations) %></label>
-    <%# Posted even when every row is deleted, so removing the last one sticks. %>
+    <%# Lets an empty list be saved. %>
     <%= hidden_field_tag 'settings[destinations][]', '', id: nil %>
     <%= select_tag 'settings[destinations][]', options_for_select(destination_options),
-          multiple: true, size: 6, id: 'settings_destinations', class: 'observability-list' %>
+          multiple: true, size: 6, id: 'settings_destinations', class: 'observability-destinations multi-row' %>
     <em class="info"><%= l(:text_observability_destinations) %></em>
   </p>
   <p>
@@ -35,60 +30,19 @@
   </p>
 </fieldset>
 
-<fieldset>
-  <legend><%= l(:label_observability_hosting) %></legend>
-  <p>
-    <label for="settings_hosted_viewers"><%= l(:label_observability_host_jaeger) %></label>
-    <%= hidden_field_tag 'settings[hosted_viewers][]', '', id: nil %>
-    <%= check_box_tag 'settings[hosted_viewers][]', jaeger.key, hosted.include?(jaeger), id: 'settings_hosted_viewers' %>
-    <em class="info"><%= l(:text_observability_viewers) %></em>
-  </p>
-
-  <% if hosted.any? %>
-    <table class="list observability-viewers">
-      <thead>
-        <tr>
-          <th><%= l(:label_observability_viewer) %></th>
-          <th><%= l(:field_status) %></th>
-          <th><%= l(:label_observability_receives_at) %></th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <% hosted.each do |viewer| %>
-          <% status = viewers.status(viewer) %>
-          <tr>
-            <td><%= link_to viewer.label, "http://#{request.host}:#{viewer.ui_port}", target: '_blank', rel: 'noopener' %></td>
-            <td><%= l(:"label_observability_#{status}") %></td>
-            <td>
-              <code><%= viewer.receives %></code>
-              <% unless recorded_types.include?(viewer.key) %>
-                <em class="info"><%= l(:text_observability_not_recorded) %></em>
-              <% end %>
-            </td>
-            <td class="buttons">
-              <% if status == :stopped %>
-                <%= link_to l(:button_observability_start), start_observability_viewer_path(viewer.key), method: :post %>
-              <% elsif status == :running %>
-                <%= link_to l(:button_observability_stop), stop_observability_viewer_path(viewer.key), method: :post %>
-              <% end %>
-            </td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-  <% end %>
-</fieldset>
-
 <%# Moved out of the form by jQuery UI, so these fields are never posted. %>
 <div id="observability-destination-dlg" title="<%= l(:label_observability_destination) %>" style="display:none;">
   <table class="observability-dialog">
     <tr>
-      <th><label for="observability_type"><%= l(:field_type) %></label></th>
+      <th><label for="observability_name"><%= l(:field_name) %></label></th>
+      <td><%= text_field_tag 'observability_name', '', name: nil %></td>
+    </tr>
+    <tr>
+      <th><label for="observability_format"><%= l(:label_observability_format) %></label></th>
       <td>
-        <%= select_tag 'observability_type',
-              options_for_select(destinations::TYPES.map { |type|
-                [type.label, type.key, { 'data-endpoint' => type.endpoint, 'data-headers' => type.headers }]
+        <%= select_tag 'observability_format',
+              options_for_select(destinations.formats.map { |format|
+                [format.label, format.key, { 'data-endpoint' => format.endpoint }]
               }), name: nil %>
       </td>
     </tr>
@@ -107,8 +61,7 @@
 </div>
 
 <style type="text/css">
-  .observability-list { min-width: 420px; max-width: 100%; }
-  table.observability-viewers td { text-align: left; }
+  .observability-destinations { min-width: 420px; max-width: 100%; }
   table.observability-dialog { width: 100%; border-spacing: 8px 10px; }
   table.observability-dialog th { text-align: left; white-space: nowrap; width: 80px; vertical-align: top; }
   table.observability-dialog input, table.observability-dialog select { width: 100%; box-sizing: border-box; }
@@ -119,28 +72,33 @@
 $(function () {
   var list = $('#settings_destinations');
   var dialog = $('#observability-destination-dlg');
-  var type = $('#observability_type');
+  var name = $('#observability_name');
+  var format = $('#observability_format');
   var endpoint = $('#observability_endpoint');
   var headers = $('#observability_headers');
   // The option being edited; null while adding.
   var editing = null;
 
-  function applyDefaults() {
-    var option = type.find('option:selected');
-    endpoint.val(option.attr('data-endpoint'));
-    headers.val(option.attr('data-headers'));
+  // Shows the format's usual endpoint without overwriting what was typed.
+  function showExample() {
+    endpoint.attr('placeholder', format.find('option:selected').attr('data-endpoint'));
   }
 
   function save() {
-    var url = String(endpoint.val()).trim();
-    var extra = String(headers.val()).trim();
-    if (!/^https?:\/\/\S+$/.test(url)) {
+    var row = {
+      name: String(name.val()).trim(),
+      format: format.val(),
+      endpoint: String(endpoint.val()).trim(),
+      headers: String(headers.val()).trim()
+    };
+    if (!/^https?:\/\/\S+$/.test(row.endpoint)) {
       alert("<%= escape_javascript(l(:text_observability_invalid_endpoint)) %>");
       return;
     }
+    var label = [row.name, format.find('option:selected').text(), row.endpoint].filter(Boolean).join('  |  ');
     var option = editing || $('<option>').appendTo(list);
-    option.val([type.val(), url, extra].join('|'));
-    option.text(type.find('option:selected').text() + '  |  ' + url + (extra ? '  |  ****' : ''));
+    option.val(JSON.stringify(row));
+    option.text(label + (row.headers ? '  |  ****' : ''));
     dialog.dialog('close');
   }
 
@@ -151,7 +109,7 @@ $(function () {
       { text: "<%= escape_javascript(l(:button_cancel)) %>", click: function () { dialog.dialog('close'); } }
     ]
   });
-  type.on('change', applyDefaults);
+  format.on('change', showExample);
 
   $('[data-destination-action]').on('click', function (event) {
     event.preventDefault();
@@ -159,24 +117,29 @@ $(function () {
     var selected = list.find('option:selected');
     if (action === 'add') {
       editing = null;
-      type.prop('selectedIndex', 0);
-      applyDefaults();
+      name.val('');
+      format.prop('selectedIndex', 0);
+      endpoint.val('');
+      headers.val('');
+      showExample();
       dialog.dialog('open');
     } else if (!selected.length) {
       alert("<%= escape_javascript(l(:text_observability_select_row)) %>");
     } else if (action === 'edit') {
       editing = selected.first();
-      var parts = editing.val().split('|');
-      type.val(parts[0]);
-      endpoint.val(parts[1] || '');
-      headers.val(parts.slice(2).join('|'));
+      var row = JSON.parse(editing.val());
+      name.val(row.name);
+      format.val(row.format);
+      endpoint.val(row.endpoint);
+      headers.val(row.headers);
+      showExample();
       dialog.dialog('open');
     } else if (confirm("<%= escape_javascript(l(:text_are_you_sure)) %>")) {
       selected.remove();
     }
   });
 
-  // A multi-select posts only selected options, so select every row on save.
+  // Only selected options are posted, so select every row on save.
   list.closest('form').on('submit', function () {
     list.find('option').prop('selected', true);
   });
