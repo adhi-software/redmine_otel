@@ -1,12 +1,69 @@
 en:
-  label_observability_recording: Recording and tracing
-  label_observability_destinations: Destinations
-  label_observability_destination: Destination
-  label_observability_format: Format
-  label_observability_endpoint: Endpoint
-  label_observability_headers: Headers
-  text_observability_destinations: Every request, SQL query and outgoing HTTP call is sent to each destination. Install and run the tracing backend yourself, then add its URL here. Changes apply without a restart.
-  text_observability_headers: "Comma-separated key=value pairs, e.g. api-key=YOUR_KEY"
-  text_observability_select_row: Select a destination first.
-  text_observability_invalid_endpoint: Enter an endpoint URL that starts with http:// or https://.
-  text_observability_not_loaded: "Tracing is off because the plugin initializer is not loaded. Add config.paths['config/initializers'] << 'plugins/redmine_observability/config/initializers' to config/additional_environment.rb and restart Redmine."
+  label_ob_recording: Recording and tracing
+  label_ob_destinations: Destinations
+  label_ob_destination: Destination
+  label_ob_format: Format
+  label_ob_endpoint: Endpoint
+  label_ob_headers: Headers
+  text_ob_destinations: Every request, SQL query and outgoing HTTP call is sent to each destination. Install and run the tracing backend yourself, then add its URL here. Changes apply without a restart.
+  text_ob_headers: "Comma-separated key=value pairs, e.g. api-key=YOUR_KEY"
+  text_ob_select_row: Select a destination first.
+  text_ob_invalid_endpoint: Enter an endpoint URL that starts with http:// or https://.
+  text_ob_not_loaded: "Tracing is off because the plugin was not loaded when Redmine started. Run bundle install and restart Redmine."
+  label_ob_storage: Traces in Redmine
+  label_ob_store_traces: Store traces
+  text_ob_store_traces: Saves every request, SQL query and outgoing HTTP call to the Redmine database, to view under Administration » Traces. Destinations below still receive them.
+  label_ob_retention_days: Keep for (days)
+  text_ob_traces_off: Traces are not being stored. Turn on "Store traces" in the plugin settings.
+  label_ob_traces: Traces
+  label_ob_web_requests: Web requests
+  label_ob_background: Background work
+  label_ob_period: Period
+  label_ob_any_time: Any time
+  label_ob_last_hour: Last hour
+  label_ob_last_hours: "Last %{count} hours"
+  label_ob_last_days: "Last %{count} days"
+  label_ob_custom_range: Custom range
+  label_ob_from: From
+  label_ob_to: To
+  label_ob_min_duration: Min duration
+  label_ob_max_duration: Max duration
+  text_ob_duration_hint: "e.g. 1.2s, 100ms, 500us"
+  label_ob_errors_only: Errors only
+  label_ob_search_hint: Name or path
+  label_ob_find_traces: Find traces
+  label_ob_x_traces:
+    one: 1 trace
+    other: "%{count} traces"
+  label_ob_x_spans:
+    one: 1 span
+    other: "%{count} spans"
+  label_ob_x_errors:
+    one: 1 error
+    other: "%{count} errors"
+  label_ob_most_recent: Most recent
+  label_ob_oldest_first: Oldest first
+  label_ob_longest_first: Longest first
+  label_ob_shortest_first: Shortest first
+  label_ob_ago: "%{value} ago"
+  text_ob_delete_traces:
+    one: Delete the trace matching these filters? This cannot be undone.
+    other: "Delete the %{count} traces matching these filters, on every page? This cannot be undone."
+  notice_ob_traces_deleted:
+    one: 1 trace deleted.
+    other: "%{count} traces deleted."
+  label_ob_path: Path
+  label_ob_duration: Duration
+  label_ob_spans: Spans
+  label_ob_span: Span
+  label_ob_trace_id: Trace ID
+  label_ob_timeline: Timeline
+  label_ob_offset: Starts at
+  label_ob_request: Request
+  label_ob_sql: SQL
+  label_ob_http_call: Outgoing HTTP
+  label_ob_other: Other
+  label_ob_error: Error
+  label_ob_ok: OK
+  text_ob_chart_hint: Each dot is a trace; bigger dots have more spans.
+  text_ob_click_span: Click a span to see its details.

@@ -1,0 +1,263 @@
+<div class="contextual">
+  <%= link_to sprite_icon('settings', l(:label_settings)), plugin_settings_path('redmine_observability'), class: 'icon icon-settings' %>
+</div>
+
+<%= title l(:label_ob_traces) %>
+
+<% if !RedmineObservability.pipeline %>
+  <div class="flash warning"><%= l(:text_ob_not_loaded) %></div>
+<% elsif !RedmineObservability.store_traces? %>
+  <div class="flash warning"><%= l(:text_ob_traces_off) %></div>
+<% end %>
+
+<div class="ob-page">
+<%= form_tag(ob_traces_path, method: :get, id: 'ob-search', class: 'ob-search') do %>
+  <h3><%= l(:label_filter_plural) %></h3>
+  <div class="ob-field">
+    <label for="type"><%= l(:field_type) %></label>
+    <%= select_tag 'type', options_for_select([[l(:label_ob_web_requests), ''],
+                                                [l(:label_ob_background), 'other'],
+                                                [l(:label_all), 'all']], params[:type]) %>
+  </div>
+  <div class="ob-field">
+    <label for="q"><%= l(:label_search) %></label>
+    <%= text_field_tag 'q', params[:q], placeholder: l(:label_ob_search_hint) %>
+  </div>
+  <div class="ob-field">
+    <label for="period"><%= l(:label_ob_period) %></label>
+    <%= select_tag 'period', ob_period_options(params[:period]) %>
+  </div>
+  <% custom = params[:period] == 'custom' %>
+  <div id="ob-custom-range" class="ob-pair" style="<%= 'display: none;' unless custom %>">
+    <div class="ob-field">
+      <label for="from"><%= l(:label_ob_from) %></label>
+      <%= date_field_tag 'from', params[:from], disabled: !custom %><%= calendar_for('from') %>
+    </div>
+    <div class="ob-field">
+      <label for="to"><%= l(:label_ob_to) %></label>
+      <%= date_field_tag 'to', params[:to], disabled: !custom %><%= calendar_for('to') %>
+    </div>
+  </div>
+  <div class="ob-pair">
+    <div class="ob-field">
+      <label for="min_duration"><%= l(:label_ob_min_duration) %></label>
+      <%= text_field_tag 'min_duration', params[:min_duration], placeholder: '100ms' %>
+    </div>
+    <div class="ob-field">
+      <label for="max_duration"><%= l(:label_ob_max_duration) %></label>
+      <%= text_field_tag 'max_duration', params[:max_duration], placeholder: '1.2s' %>
+    </div>
+  </div>
+  <p class="ob-hint"><%= l(:text_ob_duration_hint) %></p>
+  <div class="ob-field">
+    <label class="ob-check"><%= check_box_tag 'errors', '1', params[:errors] == '1' %> <%= l(:label_ob_errors_only) %></label>
+  </div>
+  <%= submit_tag l(:label_ob_find_traces), class: 'ob-submit', name: nil %>
+  <div class="ob-clear">
+    <%= link_to sprite_icon('reload', l(:button_clear)), ob_traces_path, class: 'icon icon-reload' %>
+  </div>
+<% end %>
+
+<div class="ob-results">
+<% if @traces.empty? %>
+  <p class="nodata"><%= l(:label_no_data) %></p>
+<% else %>
+  <% longest = [@traces.map(&:duration_us).max, 1].max.to_f %>
+  <div class="ob-chart">
+    <div class="ob-chart-head">
+      <div>
+        <strong><%= l(:label_ob_duration) %></strong>
+        <span class="ob-chart-note"><%= l(:text_ob_chart_hint) %></span>
+      </div>
+      <% if @traces.any?(&:failed?) && !@traces.all?(&:failed?) %>
+        <div class="ob-legend">
+          <span><i class="ob-legend-ok"></i><%= l(:label_ob_ok) %></span>
+          <span><i class="ob-legend-error"></i><%= l(:label_ob_error) %></span>
+        </div>
+      <% end %>
+    </div>
+    <div class="ob-chart-plot">
+      <%= content_tag :canvas, '', id: 'ob-chart', role: 'img', 'aria-label': l(:label_ob_duration),
+                      data: { points: ob_chart_points(@traces, @span_counts).to_json, zone: ob_zone_name } %>
+    </div>
+  </div>
+
+  <div class="ob-results-header">
+    <strong><%= l(:label_ob_x_traces, count: @trace_count) %></strong>
+    <%= delete_link ob_traces_path(filter_params), class: 'icon icon-del ob-delete',
+                    data: { confirm: l(:text_ob_delete_traces, count: @trace_count) } %>
+    <label>
+      <%= l(:label_sort) %>:
+      <%= select_tag 'sort', ob_sort_options(@sort_criteria.to_param), form: 'ob-search', onchange: 'this.form.submit();' %>
+    </label>
+  </div>
+
+  <% @traces.each do |trace| %>
+    <% errors = @error_counts[trace.trace_id].to_i %>
+    <% started_at = ob_local(trace.started_at) %>
+    <div class="ob-trace<%= ' ob-failed' if trace.failed? %>">
+      <%= link_to ob_trace_path(trace.trace_id), class: 'ob-trace-title' do %>
+        <span class="ob-trace-bar" style="width: <%= (trace.duration_us / longest * 100).round(2) %>%;"></span>
+        <span class="ob-trace-name"><%= trace.name %> <span class="ob-trace-id"><%= trace.trace_id.first(7) %></span></span>
+        <span class="ob-trace-duration"><%= ob_duration(trace.duration_us) %></span>
+      <% end %>
+      <div class="ob-trace-body">
+        <span class="ob-tag"><%= l(:label_ob_x_spans, count: @span_counts[trace.trace_id].to_i) %></span>
+        <% if errors > 0 %>
+          <span class="ob-tag ob-tag-error"><%= l(:label_ob_x_errors, count: errors) %></span>
+        <% end %>
+        <% if trace.http_status %>
+          <span class="ob-tag ob-status-<%= trace.http_status / 100 %>xx"><%= trace.http_status %></span>
+        <% end %>
+        <span class="ob-trace-target" title="<%= trace.target %>"><%= trace.target %></span>
+        <span class="ob-trace-when">
+          <%= started_at.to_date == User.current.today ? l(:label_today).capitalize : format_date(started_at) %>
+          <span class="ob-divider">|</span><%= started_at.strftime('%H:%M:%S') %>
+          <span class="ob-ago"><%= l(:label_ob_ago, value: distance_of_time_in_words(Time.now, trace.started_at)) %></span>
+        </span>
+      </div>
+    </div>
+  <% end %>
+
+  <span class="pagination"><%= pagination_links_full @trace_pages, @trace_count %></span>
+<% end %>
+</div>
+</div>
+
+<style type="text/css">
+  /* Colours of the sidebar-white theme; the chart reads them too. */
+  .ob-page {
+    --ob-accent: #0c66e4; --ob-accent-hover: #0055cc; --ob-accent-soft: #e9f2ff;
+    --ob-error: #c9372c; --ob-error-hover: #ae2e24; --ob-error-soft: #ffeceb;
+    --ob-success: #22a06b; --ob-success-text: #216e4e; --ob-success-soft: #dcfff1;
+    --ob-warning: #e2b203; --ob-warning-text: #a54800; --ob-warning-soft: #fff7d6;
+    --ob-text: #172b4d; --ob-text-subtle: #44546f; --ob-text-muted: #6b778c;
+    --ob-line: #dcdfe4; --ob-grid: #f1f2f4; --ob-surface: #ffffff; --ob-surface-subtle: #f7f8f9;
+    --ob-shadow: 0 1px 1px rgba(9, 30, 66, 0.13), 0 0 1px rgba(9, 30, 66, 0.2);
+    display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; color: var(--ob-text);
+  }
+  .ob-search { display: block; flex: 0 0 240px; box-sizing: border-box; padding: 14px 16px 16px; background: var(--ob-surface); border-radius: 8px; box-shadow: var(--ob-shadow); }
+  .ob-search h3 { margin: 0 0 14px; padding: 0 0 10px; border-bottom: 1px solid var(--ob-line); color: var(--ob-text); font-size: 1.05em; }
+  .ob-field { margin-bottom: 12px; min-width: 0; }
+  .ob-field > label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.9em; color: var(--ob-text-subtle); }
+  .ob-field input[type="text"], .ob-field input[type="date"], .ob-field select,
+  .ob-field .ui.dropdown { width: 100%; min-width: 0; }
+  .ob-field label.ob-check { font-weight: normal; color: var(--ob-text); }
+  .ob-pair { display: flex; gap: 8px; }
+  .ob-pair > .ob-field { flex: 1; }
+  #ob-custom-range { flex-direction: column; gap: 0; }
+  .ob-search p.ob-hint { margin: -8px 0 12px; font-size: 0.85em; color: var(--ob-text-muted); }
+  .ob-search input.ob-submit { width: 100%; height: 34px; color: #fff; background: var(--ob-accent); border: 0; border-radius: 6px; font-weight: 600; }
+  .ob-search input.ob-submit:hover { background: var(--ob-accent-hover); }
+  .ob-clear { margin-top: 10px; text-align: center; }
+
+  .ob-results { flex: 1 1 400px; min-width: 0; }
+  .ob-chart { margin-bottom: 16px; padding: 12px 16px 8px; background: var(--ob-surface); border-radius: 8px; box-shadow: var(--ob-shadow); }
+  .ob-chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 16px; margin-bottom: 8px; }
+  .ob-chart-head strong { margin-right: 8px; color: var(--ob-text); }
+  .ob-chart-note, .ob-legend { font-size: 0.85em; color: var(--ob-text-muted); }
+  .ob-legend span { margin-left: 12px; white-space: nowrap; color: var(--ob-text-subtle); }
+  .ob-legend i { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; vertical-align: 1px; }
+  .ob-legend-ok { background: var(--ob-accent); }
+  .ob-legend-error { background: var(--ob-error); }
+  .ob-chart-plot { position: relative; height: 180px; }
+
+  .ob-results-header { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; color: var(--ob-text-subtle); }
+  .ob-results-header strong { margin-right: auto; font-size: 1.2em; color: var(--ob-text); }
+  .ob-results-header a.ob-delete { color: var(--ob-text-subtle); }
+  .ob-results-header a.ob-delete:hover { color: var(--ob-error); text-decoration: none; }
+  .ob-trace { margin-bottom: 6px; border-radius: 8px; overflow: hidden; background: var(--ob-surface); box-shadow: var(--ob-shadow); transition: box-shadow 0.15s; }
+  .ob-trace:hover { box-shadow: 0 4px 8px -2px rgba(9, 30, 66, 0.2), 0 0 1px rgba(9, 30, 66, 0.25); }
+  a.ob-trace-title { position: relative; display: flex; justify-content: space-between; gap: 12px; padding: 5px 12px; background: var(--ob-surface-subtle); border-bottom: 1px solid var(--ob-grid); color: var(--ob-text); font-size: 1.05em; }
+  a.ob-trace-title:hover { text-decoration: none; }
+  a.ob-trace-title:hover .ob-trace-name { color: var(--ob-accent); }
+  .ob-trace-bar { position: absolute; top: 0; bottom: 0; left: 0; background: var(--ob-accent-soft); }
+  .ob-failed .ob-trace-bar { background: var(--ob-error-soft); }
+  .ob-trace-name, .ob-trace-duration { position: relative; }
+  .ob-trace-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ob-trace-id { margin-left: 4px; font-weight: normal; font-family: monospace; font-size: 0.9em; color: var(--ob-text-muted); }
+  .ob-trace-duration { white-space: nowrap; font-weight: 600; }
+  .ob-failed .ob-trace-duration { color: var(--ob-error); }
+  /* One line under the title: tags, the path (cut with an ellipsis) and the time. */
+  .ob-trace-body { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 5px 12px; }
+  .ob-trace-target { flex: 1 1 120px; min-width: 0; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ob-text-subtle); font-family: monospace; font-size: 0.95em; }
+  .ob-tag { display: inline-block; padding: 0 8px; line-height: 20px; font-size: 0.85em; font-weight: 600; white-space: nowrap; color: var(--ob-text-subtle); background: var(--ob-grid); border-radius: 10px; }
+  .ob-tag-error { color: var(--ob-error); background: var(--ob-error-soft); }
+  .ob-status-2xx, .ob-status-3xx { color: var(--ob-success-text); background: var(--ob-success-soft); }
+  .ob-status-4xx { color: var(--ob-warning-text); background: var(--ob-warning-soft); }
+  .ob-status-5xx { color: var(--ob-error); background: var(--ob-error-soft); }
+  .ob-trace-when { margin-left: auto; white-space: nowrap; color: var(--ob-text-subtle); font-size: 0.95em; }
+  .ob-divider { margin: 0 6px; color: var(--ob-line); }
+  .ob-ago { margin-left: 8px; color: var(--ob-text-muted); font-size: 0.9em; }
+
+  @media screen and (max-width: 899px) {
+    .ob-search { flex-basis: 100%; }
+    .ob-results { flex-basis: 100%; }
+  }
+</style>
+
+<%= javascript_tag do %>
+  $(function () {
+    $('#period').on('change', function () {
+      var custom = this.value === 'custom';
+      $('#ob-custom-range').css('display', custom ? 'flex' : 'none').find('input').prop('disabled', !custom);
+    });
+  });
+<% end %>
+
+<%# Chart.js from Redmine's importmap. %>
+<%= javascript_tag type: 'module' do %>
+  const canvas = document.getElementById('ob-chart');
+  if (canvas) import('chart.js').then(({ default: Chart }) => {
+    const points = JSON.parse(canvas.dataset.points);
+    const style = getComputedStyle(canvas);
+    const color = (name) => style.getPropertyValue(name).trim();
+    const xs = points.map((p) => p.x);
+    const first = Math.min(...xs), last = Math.max(...xs);
+    const pad = Math.max((last - first) * 0.05, 5000);
+    const time = new Intl.DateTimeFormat(document.documentElement.lang || undefined, Object.assign(
+      { timeZone: canvas.dataset.zone || undefined, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' },
+      last - first < 86400000 ? {} : { month: 'short', day: 'numeric' }));
+    // Same format as ob_duration; the baseline reads as a bare 0.
+    const duration = (ms) => ms === 0 ? '0' : ms >= 1000 ? `${+(ms / 1000).toFixed(2)} s` : `${+ms.toFixed(ms < 10 ? 2 : 1)} ms`;
+    // Dots ringed in the surface colour keep overlaps apart; smaller ones on top.
+    const dataset = (failed) => ({
+      data: points.filter((p) => p.failed === failed).sort((a, b) => b.r - a.r),
+      backgroundColor: color(failed ? '--ob-error' : '--ob-accent'),
+      hoverBackgroundColor: color(failed ? '--ob-error-hover' : '--ob-accent-hover'),
+      borderColor: color('--ob-surface'), hoverBorderColor: color('--ob-surface'),
+      borderWidth: 2, hoverBorderWidth: 2, hoverRadius: 2, hitRadius: 8
+    });
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    Chart.defaults.color = color('--ob-text-muted');
+
+    new Chart(canvas, {
+      type: 'bubble',
+      data: { datasets: [dataset(false), dataset(true)] },
+      options: {
+        maintainAspectRatio: false,
+        animation: { duration: 250 },
+        layout: { padding: { top: 4, right: 4 } },
+        scales: {
+          x: { min: first - pad, max: last + pad, grid: { display: false }, border: { color: color('--ob-line') },
+               ticks: { maxTicksLimit: 6, includeBounds: false, padding: 6, callback: (value) => time.format(value) } },
+          y: { beginAtZero: true, grace: '12%', border: { display: false },
+               grid: { color: color('--ob-grid'), drawTicks: false },
+               ticks: { maxTicksLimit: 4, padding: 8, callback: duration } }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: color('--ob-text'), titleColor: '#fff', bodyColor: color('--ob-line'),
+            titleFont: { size: 13, weight: '600' }, padding: 10, cornerRadius: 6, caretSize: 5, displayColors: false,
+            callbacks: { title: (items) => items[0].raw.duration, label: (item) => item.raw.details }
+          }
+        },
+        onHover: (event, items) => { event.native.target.style.cursor = items.length ? 'pointer' : 'default'; },
+        onClick: (event, items, chart) => {
+          if (items.length) location.href = chart.data.datasets[items[0].datasetIndex].data[items[0].index].url;
+        }
+      }
+    });
+  });
+<% end %>

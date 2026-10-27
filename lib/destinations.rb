@@ -2,12 +2,12 @@ require 'json'
 require 'uri'
 
 module RedmineObservability
-  # A row is JSON with name, format, endpoint and headers; more formats can be added in destinations/.
+  # Saved rows are JSON with name, format, endpoint and headers.
   module Destinations
-    # How spans are sent: +exporter+ is a proc (endpoint, headers) -> span exporter; +endpoint+ is an example.
+    # +exporter+ is a proc (endpoint, headers) -> span exporter; +endpoint+ is an example.
     Format = Struct.new(:key, :label, :endpoint, :exporter, keyword_init: true)
 
-    # Rows saved before formats are "type|endpoint|headers" or JSON with a type; only Zipkin's type wasn't OTLP.
+    # Older rows are "type|endpoint|headers" or JSON with a type.
     Row = Struct.new(:name, :format, :endpoint, :headers) do
       def self.parse(text)
         text = text.to_s
@@ -24,20 +24,14 @@ module RedmineObservability
                  exporter: ->(endpoint, headers) { OpenTelemetry::Exporter::Zipkin::Exporter.new(endpoint: endpoint, headers: headers) })
     ].freeze
 
-    @added_formats = [].freeze
+    # Redmine's own database; set by "Store traces", so not in the dialog.
+    DATABASE = Format.new(key: 'database', label: 'Redmine database', endpoint: nil,
+                          exporter: ->(_endpoint, _headers) { DatabaseExporter.new })
+    DATABASE_ROW = { name: 'Redmine', format: DATABASE.key }.to_json.freeze
 
-    # Adds +format+, or replaces the built-in format with its key.
-    def self.add_format(format)
-      @added_formats = [*@added_formats.reject { _1.key == format.key }, format].freeze
-    end
+    def self.formats = FORMATS
 
-    # FORMATS, then the added formats.
-    def self.formats
-      added = @added_formats.to_h { [_1.key, _1] }
-      [*FORMATS.map { added.delete(_1.key) || _1 }, *added.values]
-    end
-
-    def self.find_format(key) = formats.find { _1.key == key }
+    def self.find_format(key) = key == DATABASE.key ? DATABASE : formats.find { _1.key == key }
 
     def self.label(key) = find_format(key)&.label || key
 

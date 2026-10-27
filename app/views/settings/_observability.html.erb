@@ -1,6 +1,6 @@
 <%
   destinations = RedmineObservability::Destinations
-  # Value is the row as JSON, so older rows are converted on save; the text hides the headers, which hold API keys.
+  # Value is the row as JSON, converting older rows on save; the text hides headers, which hold API keys.
   destination_options = Array(settings['destinations']).reject(&:blank?).map do |text|
     row = destinations::Row.parse(text)
     label = [row.name.presence, destinations.label(row.format), row.endpoint].compact.join('  |  ')
@@ -10,18 +10,36 @@
 %>
 
 <% unless RedmineObservability.pipeline %>
-  <div class="flash warning"><%= l(:text_observability_not_loaded) %></div>
+  <div class="flash warning"><%= l(:text_ob_not_loaded) %></div>
 <% end %>
 
 <fieldset>
-  <legend><%= l(:label_observability_recording) %></legend>
+  <legend><%= l(:label_ob_storage) %></legend>
   <p>
-    <label for="settings_destinations"><%= l(:label_observability_destinations) %></label>
+    <label for="settings_store_traces"><%= l(:label_ob_store_traces) %></label>
+    <%= hidden_field_tag 'settings[store_traces]', '0', id: nil %>
+    <%= check_box_tag 'settings[store_traces]', '1', settings['store_traces'] == '1', id: 'settings_store_traces' %>
+    <em class="info">
+      <%= l(:text_ob_store_traces) %>
+      <%= link_to l(:label_ob_traces), ob_traces_path %>
+    </em>
+  </p>
+  <p>
+    <label for="settings_retention_days"><%= l(:label_ob_retention_days) %></label>
+    <%= number_field_tag 'settings[retention_days]', settings['retention_days'], min: 1, max: 365,
+          placeholder: RedmineObservability::RETENTION_DAYS, id: 'settings_retention_days', style: 'width: 6em;' %>
+  </p>
+</fieldset>
+
+<fieldset>
+  <legend><%= l(:label_ob_recording) %></legend>
+  <p>
+    <label for="settings_destinations"><%= l(:label_ob_destinations) %></label>
     <%# Lets an empty list be saved. %>
     <%= hidden_field_tag 'settings[destinations][]', '', id: nil %>
     <%= select_tag 'settings[destinations][]', options_for_select(destination_options),
-          multiple: true, size: 6, id: 'settings_destinations', class: 'observability-destinations multi-row' %>
-    <em class="info"><%= l(:text_observability_destinations) %></em>
+          multiple: true, size: 6, id: 'settings_destinations', class: 'ob-destinations multi-row' %>
+    <em class="info"><%= l(:text_ob_destinations) %></em>
   </p>
   <p>
     <%= link_to l(:button_add), '#', class: 'button', data: { destination_action: 'add' } %> |
@@ -31,51 +49,51 @@
 </fieldset>
 
 <%# Moved out of the form by jQuery UI, so these fields are never posted. %>
-<div id="observability-destination-dlg" title="<%= l(:label_observability_destination) %>" style="display:none;">
-  <table class="observability-dialog">
+<div id="ob-destination-dlg" title="<%= l(:label_ob_destination) %>" style="display:none;">
+  <table class="ob-dialog">
     <tr>
-      <th><label for="observability_name"><%= l(:field_name) %></label></th>
-      <td><%= text_field_tag 'observability_name', '', name: nil %></td>
+      <th><label for="ob_name"><%= l(:field_name) %></label></th>
+      <td><%= text_field_tag 'ob_name', '', name: nil %></td>
     </tr>
     <tr>
-      <th><label for="observability_format"><%= l(:label_observability_format) %></label></th>
+      <th><label for="ob_format"><%= l(:label_ob_format) %></label></th>
       <td>
-        <%= select_tag 'observability_format',
+        <%= select_tag 'ob_format',
               options_for_select(destinations.formats.map { |format|
                 [format.label, format.key, { 'data-endpoint' => format.endpoint }]
               }), name: nil %>
       </td>
     </tr>
     <tr>
-      <th><label for="observability_endpoint"><%= l(:label_observability_endpoint) %></label></th>
-      <td><%= text_field_tag 'observability_endpoint', '', name: nil %></td>
+      <th><label for="ob_endpoint"><%= l(:label_ob_endpoint) %></label></th>
+      <td><%= text_field_tag 'ob_endpoint', '', name: nil %></td>
     </tr>
     <tr>
-      <th><label for="observability_headers"><%= l(:label_observability_headers) %></label></th>
+      <th><label for="ob_headers"><%= l(:label_ob_headers) %></label></th>
       <td>
-        <%= text_field_tag 'observability_headers', '', name: nil, autocomplete: 'off' %>
-        <em class="info"><%= l(:text_observability_headers) %></em>
+        <%= text_field_tag 'ob_headers', '', name: nil, autocomplete: 'off' %>
+        <em class="info"><%= l(:text_ob_headers) %></em>
       </td>
     </tr>
   </table>
 </div>
 
 <style type="text/css">
-  .observability-destinations { min-width: 420px; max-width: 100%; }
-  table.observability-dialog { width: 100%; border-spacing: 8px 10px; }
-  table.observability-dialog th { text-align: left; white-space: nowrap; width: 80px; vertical-align: top; }
-  table.observability-dialog input, table.observability-dialog select { width: 100%; box-sizing: border-box; }
+  .ob-destinations { min-width: 420px; max-width: 100%; }
+  table.ob-dialog { width: 100%; border-spacing: 8px 10px; }
+  table.ob-dialog th { text-align: left; white-space: nowrap; width: 80px; vertical-align: top; }
+  table.ob-dialog input, table.ob-dialog select { width: 100%; box-sizing: border-box; }
 </style>
 
 <script type="text/javascript">
 //<![CDATA[
 $(function () {
   var list = $('#settings_destinations');
-  var dialog = $('#observability-destination-dlg');
-  var name = $('#observability_name');
-  var format = $('#observability_format');
-  var endpoint = $('#observability_endpoint');
-  var headers = $('#observability_headers');
+  var dialog = $('#ob-destination-dlg');
+  var name = $('#ob_name');
+  var format = $('#ob_format');
+  var endpoint = $('#ob_endpoint');
+  var headers = $('#ob_headers');
   // The option being edited; null while adding.
   var editing = null;
 
@@ -92,7 +110,7 @@ $(function () {
       headers: String(headers.val()).trim()
     };
     if (!/^https?:\/\/\S+$/.test(row.endpoint)) {
-      alert("<%= escape_javascript(l(:text_observability_invalid_endpoint)) %>");
+      alert("<%= escape_javascript(l(:text_ob_invalid_endpoint)) %>");
       return;
     }
     var label = [row.name, format.find('option:selected').text(), row.endpoint].filter(Boolean).join('  |  ');
@@ -124,7 +142,7 @@ $(function () {
       showExample();
       dialog.dialog('open');
     } else if (!selected.length) {
-      alert("<%= escape_javascript(l(:text_observability_select_row)) %>");
+      alert("<%= escape_javascript(l(:text_ob_select_row)) %>");
     } else if (action === 'edit') {
       editing = selected.first();
       var row = JSON.parse(editing.val());

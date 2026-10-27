@@ -6,11 +6,9 @@
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
 
-# Tracing starts in config/initializers/opentelemetry.rb, not here.
+# Tracing starts in config/initializers/observability.rb, not here.
 
 require_relative 'lib/redmine_observability'
-# Already done by the initializer when it is loaded.
-RedmineObservability.load_extensions
 
 # Destination headers hold API keys; keep them out of the logs.
 filters = Rails.application.config.filter_parameters
@@ -25,8 +23,14 @@ Redmine::Plugin.register :redmine_observability do
 
   settings partial: 'settings/observability', default: {
     # JSON rows of name, format, endpoint and headers; every span goes to each one.
-    'destinations' => []
+    'destinations' => [],
+    # '1' also saves every span to the database, shown under Administration > Traces.
+    'store_traces' => '0',
+    'retention_days' => RedmineObservability::RETENTION_DAYS.to_s
   }
+
+  menu :admin_menu, :ob_traces, { controller: 'ob_traces', action: 'index' },
+       caption: :label_ob_traces, icon: 'stats', html: { class: 'icon icon-stats' }
 end
 
 Setting.singleton_class.prepend(RedmineObservability::SettingCachePatch)
