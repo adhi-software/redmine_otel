@@ -1,7 +1,7 @@
 require 'json'
 
 module RedmineObservability
-  # Saves spans to ob_spans for Administration > Traces, and deletes expired ones hourly.
+  # Saves spans to ob_spans for Administration > Redmine Observability, and deletes expired ones hourly.
   class DatabaseExporter
     # Longer strings, like SQL or stack traces, are cut to this length.
     MAX_VALUE_LENGTH = 4_000

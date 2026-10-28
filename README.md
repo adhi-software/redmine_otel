@@ -2,7 +2,7 @@
 
 Redmine Observability is a plugin that helps you understand application performance and troubleshoot slow requests in Redmine and ERPmine. It uses [OpenTelemetry](https://opentelemetry.io) to trace incoming requests, SQL queries and outgoing HTTP calls, showing how each operation contributes to request processing time.
 
-You can store traces in Redmine for review under **Administration > Traces**, send them to one or more tracing backends such as Jaeger, Zipkin, Grafana Tempo, OpenObserve, New Relic or Honeycomb, or use both options. Trace storage, retention and export destinations are managed through the plugin settings.
+You can store traces in Redmine for review under **Administration > Redmine Observability**, send them to one or more tracing backends such as Jaeger, Zipkin, Grafana Tempo, OpenObserve, New Relic or Honeycomb, or use both options. Trace storage, retention and export destinations are managed through the plugin settings.
 
 ## Installation
 

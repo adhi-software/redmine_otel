@@ -12,10 +12,10 @@ en:
   text_ob_not_loaded: "Tracing is off because the plugin was not loaded when Redmine started. Run bundle install and restart Redmine."
   label_ob_storage: Traces in Redmine
   label_ob_store_traces: Store traces
-  text_ob_store_traces: Saves every request, SQL query and outgoing HTTP call to the Redmine database, to view under Administration » Traces. Destinations below still receive them.
+  text_ob_store_traces: Saves every request, SQL query and outgoing HTTP call to the Redmine database, to view under Administration » Redmine Observability. Destinations below still receive them.
   label_ob_retention_days: Keep for (days)
   text_ob_traces_off: Traces are not being stored. Turn on "Store traces" in the plugin settings.
-  label_ob_traces: Traces
+  label_ob_observability: Redmine Observability
   label_ob_web_requests: Web requests
   label_ob_background: Background work
   label_ob_period: Period
@@ -31,7 +31,6 @@ en:
   text_ob_duration_hint: "e.g. 1.2s, 100ms, 500us"
   label_ob_errors_only: Errors only
   label_ob_search_hint: Name or path
-  label_ob_find_traces: Find traces
   label_ob_x_traces:
     one: 1 trace
     other: "%{count} traces"
@@ -49,6 +48,9 @@ en:
   text_ob_delete_traces:
     one: Delete the trace matching these filters? This cannot be undone.
     other: "Delete the %{count} traces matching these filters, on every page? This cannot be undone."
+  label_ob_delete_all: Delete all
+  label_ob_delete_selected: Delete selected
+  text_ob_delete_selected: Delete the selected traces? This cannot be undone.
   notice_ob_traces_deleted:
     one: 1 trace deleted.
     other: "%{count} traces deleted."

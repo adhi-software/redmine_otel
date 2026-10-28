@@ -24,15 +24,20 @@ Redmine::Plugin.register :redmine_observability do
   settings partial: 'settings/observability', default: {
     # JSON rows of name, format, endpoint and headers; every span goes to each one.
     'destinations' => [],
-    # '1' also saves every span to the database, shown under Administration > Traces.
+    # '1' also saves every span to the database, shown under Administration > Redmine Observability.
     'store_traces' => '0',
     'retention_days' => RedmineObservability::RETENTION_DAYS.to_s
   }
 
   menu :admin_menu, :ob_traces, { controller: 'ob_traces', action: 'index' },
-       caption: :label_ob_traces, icon: 'stats', html: { class: 'icon icon-stats' }
+       caption: :label_ob_observability, icon: 'stats', html: { class: 'icon icon-stats' }
 end
 
 Setting.singleton_class.prepend(RedmineObservability::SettingCachePatch)
+
+# Background work outside a request: Rufus is loaded by Bundler, the agent plugin's
+# Runner by its init.rb, which runs before this one.
+Rufus::Scheduler::Job.prepend(RedmineObservability::RufusJobTracing) if defined?(Rufus::Scheduler::Job)
+RedmineAgent::Runner.singleton_class.prepend(RedmineObservability::AgentRunTracing) if defined?(RedmineAgent::Runner)
 
 Rails.application.config.after_initialize { RedmineObservability.apply_destinations }

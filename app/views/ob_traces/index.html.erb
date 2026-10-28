@@ -2,7 +2,7 @@
   <%= link_to sprite_icon('settings', l(:label_settings)), plugin_settings_path('redmine_observability'), class: 'icon icon-settings' %>
 </div>
 
-<%= title l(:label_ob_traces) %>
+<%= title l(:label_ob_observability) %>
 
 <% if !RedmineObservability.pipeline %>
   <div class="flash warning"><%= l(:text_ob_not_loaded) %></div>
@@ -10,55 +10,52 @@
   <div class="flash warning"><%= l(:text_ob_traces_off) %></div>
 <% end %>
 
-<div class="ob-page">
-<%= form_tag(ob_traces_path, method: :get, id: 'ob-search', class: 'ob-search') do %>
-  <h3><%= l(:label_filter_plural) %></h3>
-  <div class="ob-field">
-    <label for="type"><%= l(:field_type) %></label>
+<%= form_tag(ob_traces_path, method: :get, id: 'ob-search') do %>
+<fieldset class="ob-filters"><legend><%= l(:label_filter_plural) %></legend>
+  <span class="ob-filter">
+    <label for="type"><%= l(:field_type) %>:</label>
     <%= select_tag 'type', options_for_select([[l(:label_ob_web_requests), ''],
                                                 [l(:label_ob_background), 'other'],
                                                 [l(:label_all), 'all']], params[:type]) %>
-  </div>
-  <div class="ob-field">
-    <label for="q"><%= l(:label_search) %></label>
-    <%= text_field_tag 'q', params[:q], placeholder: l(:label_ob_search_hint) %>
-  </div>
-  <div class="ob-field">
-    <label for="period"><%= l(:label_ob_period) %></label>
+  </span>
+  <span class="ob-filter">
+    <label for="q"><%= l(:label_search) %>:</label>
+    <%= text_field_tag 'q', params[:q], size: 25, placeholder: l(:label_ob_search_hint) %>
+  </span>
+  <span class="ob-filter">
+    <label for="period"><%= l(:label_ob_period) %>:</label>
     <%= select_tag 'period', ob_period_options(params[:period]) %>
-  </div>
+  </span>
   <% custom = params[:period] == 'custom' %>
-  <div id="ob-custom-range" class="ob-pair" style="<%= 'display: none;' unless custom %>">
-    <div class="ob-field">
-      <label for="from"><%= l(:label_ob_from) %></label>
+  <span id="ob-custom-range" style="<%= 'display: none;' unless custom %>">
+    <span class="ob-filter">
+      <label for="from"><%= l(:label_ob_from) %>:</label>
       <%= date_field_tag 'from', params[:from], disabled: !custom %><%= calendar_for('from') %>
-    </div>
-    <div class="ob-field">
-      <label for="to"><%= l(:label_ob_to) %></label>
+    </span>
+    <span class="ob-filter">
+      <label for="to"><%= l(:label_ob_to) %>:</label>
       <%= date_field_tag 'to', params[:to], disabled: !custom %><%= calendar_for('to') %>
-    </div>
-  </div>
-  <div class="ob-pair">
-    <div class="ob-field">
-      <label for="min_duration"><%= l(:label_ob_min_duration) %></label>
-      <%= text_field_tag 'min_duration', params[:min_duration], placeholder: '100ms' %>
-    </div>
-    <div class="ob-field">
-      <label for="max_duration"><%= l(:label_ob_max_duration) %></label>
-      <%= text_field_tag 'max_duration', params[:max_duration], placeholder: '1.2s' %>
-    </div>
-  </div>
-  <p class="ob-hint"><%= l(:text_ob_duration_hint) %></p>
-  <div class="ob-field">
-    <label class="ob-check"><%= check_box_tag 'errors', '1', params[:errors] == '1' %> <%= l(:label_ob_errors_only) %></label>
-  </div>
-  <%= submit_tag l(:label_ob_find_traces), class: 'ob-submit', name: nil %>
-  <div class="ob-clear">
+    </span>
+  </span>
+  <span class="ob-filter" title="<%= l(:text_ob_duration_hint) %>">
+    <label for="min_duration"><%= l(:label_ob_min_duration) %>:</label>
+    <%= text_field_tag 'min_duration', params[:min_duration], size: 6, placeholder: '100ms' %>
+  </span>
+  <span class="ob-filter" title="<%= l(:text_ob_duration_hint) %>">
+    <label for="max_duration"><%= l(:label_ob_max_duration) %>:</label>
+    <%= text_field_tag 'max_duration', params[:max_duration], size: 6, placeholder: '1.2s' %>
+  </span>
+  <span class="ob-filter">
+    <label><%= check_box_tag 'errors', '1', params[:errors] == '1' %> <%= l(:label_ob_errors_only) %></label>
+  </span>
+  <span class="ob-filter">
+    <%= submit_tag l(:button_apply), class: 'small', name: nil %>
     <%= link_to sprite_icon('reload', l(:button_clear)), ob_traces_path, class: 'icon icon-reload' %>
-  </div>
+  </span>
+</fieldset>
 <% end %>
 
-<div class="ob-results">
+<div class="ob-page">
 <% if @traces.empty? %>
   <p class="nodata"><%= l(:label_no_data) %></p>
 <% else %>
@@ -83,45 +80,59 @@
   </div>
 
   <div class="ob-results-header">
+    <label class="ob-select-all" title="<%= l(:button_check_all) %> / <%= l(:button_uncheck_all) %>">
+      <input type="checkbox" id="ob-select-all" aria-label="<%= l(:button_check_all) %>">
+    </label>
     <strong><%= l(:label_ob_x_traces, count: @trace_count) %></strong>
-    <%= delete_link ob_traces_path(filter_params), class: 'icon icon-del ob-delete',
-                    data: { confirm: l(:text_ob_delete_traces, count: @trace_count) } %>
+    <%# Deletes every matching trace; with traces checked, the script below deletes only those. %>
+    <%= delete_link ob_traces_path(filter_params), { id: 'ob-delete', class: 'icon icon-del ob-delete',
+                    data: { confirm: l(:text_ob_delete_traces, count: @trace_count),
+                            selected_label: l(:label_ob_delete_selected),
+                            selected_confirm: l(:text_ob_delete_selected) } }, l(:label_ob_delete_all) %>
     <label>
       <%= l(:label_sort) %>:
       <%= select_tag 'sort', ob_sort_options(@sort_criteria.to_param), form: 'ob-search', onchange: 'this.form.submit();' %>
     </label>
   </div>
+  <%# The checkboxes join this form through their form attribute; the blank id keeps ids[] present when none is checked. %>
+  <%= form_tag(ob_traces_path(filter_params), method: :delete, id: 'ob-delete-selected') do %>
+    <%= hidden_field_tag 'ids[]', '', id: nil %>
+  <% end %>
 
   <% @traces.each do |trace| %>
     <% errors = @error_counts[trace.trace_id].to_i %>
     <% started_at = ob_local(trace.started_at) %>
     <div class="ob-trace<%= ' ob-failed' if trace.failed? %>">
-      <%= link_to ob_trace_path(trace.trace_id), class: 'ob-trace-title' do %>
-        <span class="ob-trace-bar" style="width: <%= (trace.duration_us / longest * 100).round(2) %>%;"></span>
-        <span class="ob-trace-name"><%= trace.name %> <span class="ob-trace-id"><%= trace.trace_id.first(7) %></span></span>
-        <span class="ob-trace-duration"><%= ob_duration(trace.duration_us) %></span>
-      <% end %>
-      <div class="ob-trace-body">
-        <span class="ob-tag"><%= l(:label_ob_x_spans, count: @span_counts[trace.trace_id].to_i) %></span>
-        <% if errors > 0 %>
-          <span class="ob-tag ob-tag-error"><%= l(:label_ob_x_errors, count: errors) %></span>
+      <label class="ob-trace-check">
+        <%= check_box_tag 'ids[]', trace.trace_id, false, id: nil, form: 'ob-delete-selected', 'aria-label': trace.name %>
+      </label>
+      <div class="ob-trace-main">
+        <%= link_to ob_trace_path(trace.trace_id), class: 'ob-trace-title' do %>
+          <span class="ob-trace-bar" style="width: <%= (trace.duration_us / longest * 100).round(2) %>%;"></span>
+          <span class="ob-trace-name"><%= trace.name %> <span class="ob-trace-id"><%= trace.trace_id.first(7) %></span></span>
+          <span class="ob-trace-duration"><%= ob_duration(trace.duration_us) %></span>
         <% end %>
-        <% if trace.http_status %>
-          <span class="ob-tag ob-status-<%= trace.http_status / 100 %>xx"><%= trace.http_status %></span>
-        <% end %>
-        <span class="ob-trace-target" title="<%= trace.target %>"><%= trace.target %></span>
-        <span class="ob-trace-when">
-          <%= started_at.to_date == User.current.today ? l(:label_today).capitalize : format_date(started_at) %>
-          <span class="ob-divider">|</span><%= started_at.strftime('%H:%M:%S') %>
-          <span class="ob-ago"><%= l(:label_ob_ago, value: distance_of_time_in_words(Time.now, trace.started_at)) %></span>
-        </span>
+        <div class="ob-trace-body">
+          <span class="ob-tag"><%= l(:label_ob_x_spans, count: @span_counts[trace.trace_id].to_i) %></span>
+          <% if errors > 0 %>
+            <span class="ob-tag ob-tag-error"><%= l(:label_ob_x_errors, count: errors) %></span>
+          <% end %>
+          <% if trace.http_status %>
+            <span class="ob-tag ob-status-<%= trace.http_status / 100 %>xx"><%= trace.http_status %></span>
+          <% end %>
+          <span class="ob-trace-target" title="<%= trace.target %>"><%= trace.target %></span>
+          <span class="ob-trace-when">
+            <%= started_at.to_date == User.current.today ? l(:label_today).capitalize : format_date(started_at) %>
+            <span class="ob-divider">|</span><%= started_at.strftime('%H:%M:%S') %>
+            <span class="ob-ago"><%= l(:label_ob_ago, value: distance_of_time_in_words(Time.now, trace.started_at)) %></span>
+          </span>
+        </div>
       </div>
     </div>
   <% end %>
 
   <span class="pagination"><%= pagination_links_full @trace_pages, @trace_count %></span>
 <% end %>
-</div>
 </div>
 
 <style type="text/css">
@@ -134,24 +145,12 @@
     --ob-text: #172b4d; --ob-text-subtle: #44546f; --ob-text-muted: #6b778c;
     --ob-line: #dcdfe4; --ob-grid: #f1f2f4; --ob-surface: #ffffff; --ob-surface-subtle: #f7f8f9;
     --ob-shadow: 0 1px 1px rgba(9, 30, 66, 0.13), 0 0 1px rgba(9, 30, 66, 0.2);
-    display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; color: var(--ob-text);
+    color: var(--ob-text);
   }
-  .ob-search { display: block; flex: 0 0 240px; box-sizing: border-box; padding: 14px 16px 16px; background: var(--ob-surface); border-radius: 8px; box-shadow: var(--ob-shadow); }
-  .ob-search h3 { margin: 0 0 14px; padding: 0 0 10px; border-bottom: 1px solid var(--ob-line); color: var(--ob-text); font-size: 1.05em; }
-  .ob-field { margin-bottom: 12px; min-width: 0; }
-  .ob-field > label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.9em; color: var(--ob-text-subtle); }
-  .ob-field input[type="text"], .ob-field input[type="date"], .ob-field select,
-  .ob-field .ui.dropdown { width: 100%; min-width: 0; }
-  .ob-field label.ob-check { font-weight: normal; color: var(--ob-text); }
-  .ob-pair { display: flex; gap: 8px; }
-  .ob-pair > .ob-field { flex: 1; }
-  #ob-custom-range { flex-direction: column; gap: 0; }
-  .ob-search p.ob-hint { margin: -8px 0 12px; font-size: 0.85em; color: var(--ob-text-muted); }
-  .ob-search input.ob-submit { width: 100%; height: 34px; color: #fff; background: var(--ob-accent); border: 0; border-radius: 6px; font-weight: 600; }
-  .ob-search input.ob-submit:hover { background: var(--ob-accent-hover); }
-  .ob-clear { margin-top: 10px; text-align: center; }
+  .ob-filters { margin-bottom: 16px; }
+  /* Keeps each label with its field when the row wraps. */
+  .ob-filter { display: inline-block; margin: 2px 14px 2px 0; white-space: nowrap; }
 
-  .ob-results { flex: 1 1 400px; min-width: 0; }
   .ob-chart { margin-bottom: 16px; padding: 12px 16px 8px; background: var(--ob-surface); border-radius: 8px; box-shadow: var(--ob-shadow); }
   .ob-chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 16px; margin-bottom: 8px; }
   .ob-chart-head strong { margin-right: 8px; color: var(--ob-text); }
@@ -164,10 +163,15 @@
 
   .ob-results-header { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; color: var(--ob-text-subtle); }
   .ob-results-header strong { margin-right: auto; font-size: 1.2em; color: var(--ob-text); }
-  .ob-results-header a.ob-delete { color: var(--ob-text-subtle); }
+  /* flex: none undoes the theme's a.icon { flex: 10px }, which stretched the link across the row. */
+  .ob-results-header a.ob-delete { flex: none; color: var(--ob-text-subtle); }
   .ob-results-header a.ob-delete:hover { color: var(--ob-error); text-decoration: none; }
-  .ob-trace { margin-bottom: 6px; border-radius: 8px; overflow: hidden; background: var(--ob-surface); box-shadow: var(--ob-shadow); transition: box-shadow 0.15s; }
+  .ob-select-all { display: flex; padding-left: 12px; margin-right: -4px; }
+  .ob-trace { display: flex; margin-bottom: 6px; border-radius: 8px; overflow: hidden; background: var(--ob-surface); box-shadow: var(--ob-shadow); transition: box-shadow 0.15s; }
   .ob-trace:hover { box-shadow: 0 4px 8px -2px rgba(9, 30, 66, 0.2), 0 0 1px rgba(9, 30, 66, 0.25); }
+  .ob-trace:has(.ob-trace-check input:checked) { box-shadow: 0 0 0 2px var(--ob-accent); }
+  .ob-trace-check { display: flex; align-items: center; padding: 0 0 0 12px; cursor: pointer; }
+  .ob-trace-main { flex: 1; min-width: 0; }
   a.ob-trace-title { position: relative; display: flex; justify-content: space-between; gap: 12px; padding: 5px 12px; background: var(--ob-surface-subtle); border-bottom: 1px solid var(--ob-grid); color: var(--ob-text); font-size: 1.05em; }
   a.ob-trace-title:hover { text-decoration: none; }
   a.ob-trace-title:hover .ob-trace-name { color: var(--ob-accent); }
@@ -189,19 +193,39 @@
   .ob-trace-when { margin-left: auto; white-space: nowrap; color: var(--ob-text-subtle); font-size: 0.95em; }
   .ob-divider { margin: 0 6px; color: var(--ob-line); }
   .ob-ago { margin-left: 8px; color: var(--ob-text-muted); font-size: 0.9em; }
-
-  @media screen and (max-width: 899px) {
-    .ob-search { flex-basis: 100%; }
-    .ob-results { flex-basis: 100%; }
-  }
 </style>
 
 <%= javascript_tag do %>
   $(function () {
     $('#period').on('change', function () {
       var custom = this.value === 'custom';
-      $('#ob-custom-range').css('display', custom ? 'flex' : 'none').find('input').prop('disabled', !custom);
+      $('#ob-custom-range').toggle(custom).find('input').prop('disabled', !custom);
     });
+
+    var boxes = $('.ob-trace-check input');
+    var deleteLink = $('#ob-delete');
+    var deleteLabel = deleteLink.find('.icon-label');
+    var allLabel = deleteLabel.text();
+    var refresh = function () {
+      var checked = boxes.filter(':checked').length;
+      $('#ob-select-all').prop({ checked: checked > 0 && checked === boxes.length,
+                                 indeterminate: checked > 0 && checked < boxes.length });
+      deleteLabel.text(checked > 0 ? deleteLink.data('selected-label') + ' (' + checked + ')' : allLabel);
+    };
+    boxes.on('change', refresh);
+    $('#ob-select-all').on('change', function () {
+      boxes.prop('checked', this.checked);
+      refresh();
+    });
+    // Runs before rails-ujs, which listens on document; stopping the event there skips its delete-all request.
+    deleteLink.on('click', function (event) {
+      if (!boxes.is(':checked')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (confirm(this.dataset.selectedConfirm)) $('#ob-delete-selected').submit();
+    });
+    // The browser may restore checked boxes on back or reload.
+    refresh();
   });
 <% end %>
 

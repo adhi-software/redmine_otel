@@ -1,4 +1,4 @@
-# Administration > Traces: spans saved by DatabaseExporter.
+# Administration > Redmine Observability: traces saved by DatabaseExporter.
 class ObTracesController < ApplicationController
   layout 'admin'
   self.main_menu = false
@@ -21,6 +21,8 @@ class ObTracesController < ApplicationController
 
   # Query parameters of the filter form, kept when deleting the listed traces.
   FILTERS = %w[type q period from to min_duration max_duration errors].freeze
+
+  TRACE_ID = /\A\h{32}\z/
 
   helper_method :filter_params
 
@@ -47,9 +49,11 @@ class ObTracesController < ApplicationController
     @duration_us = ((spans.map(&:ended_at).max - @started_at) * 1_000_000).round
   end
 
-  # Deletes every trace matching the filters, on all pages, with all of its spans.
+  # Deletes the traces checked in the list (ids[]), or without ids every trace matching
+  # the filters on all pages, with all of their spans.
   def destroy_all
-    trace_ids = filtered_roots.pluck(:trace_id)
+    scope = params.key?(:ids) ? ObSpan.roots.where(trace_id: Array(params[:ids]).grep(TRACE_ID)) : filtered_roots
+    trace_ids = scope.pluck(:trace_id)
     # Plucked first: MySQL cannot delete from ob_spans with a subquery on ob_spans.
     trace_ids.each_slice(1000) { ObSpan.where(trace_id: _1).delete_all }
     flash[:notice] = l(:notice_ob_traces_deleted, count: trace_ids.size)

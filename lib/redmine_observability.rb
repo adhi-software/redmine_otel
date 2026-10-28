@@ -6,9 +6,13 @@ require_relative 'export_pipeline'
 module RedmineObservability
   # Days a stored trace is kept when the setting is blank.
   RETENTION_DAYS = 3
+  # Marks a span that starts a trace for background work; see RootFilter.
+  BACKGROUND_JOB = 'background.job'
 
   class << self
     attr_accessor :pipeline, :sampler
+
+    def tracer = OpenTelemetry.tracer_provider.tracer('redmine_observability')
 
     def settings = Setting.plugin_redmine_observability || {}
 
@@ -61,6 +65,49 @@ module RedmineObservability
     def force_flush(timeout: nil) = OpenTelemetry::SDK::Trace::Export::SUCCESS
 
     def shutdown(timeout: nil) = OpenTelemetry::SDK::Trace::Export::SUCCESS
+  end
+
+  # Starts a trace only at a request, a job or a span marked with BACKGROUND_JOB, so SQL
+  # from boot or a background poll is dropped instead of saved one query per trace.
+  class RootFilter
+    ROOT_KINDS = %i[server consumer].freeze
+
+    def initialize(sampler)
+      @sampler = sampler
+    end
+
+    def should_sample?(trace_id:, parent_context:, links:, name:, kind:, attributes:)
+      parent = OpenTelemetry::Trace.current_span(parent_context).context
+      unless parent.valid? || ROOT_KINDS.include?(kind) || attributes&.key?(BACKGROUND_JOB)
+        return OpenTelemetry::SDK::Trace::Samplers::Result.new(decision: OpenTelemetry::SDK::Trace::Samplers::Decision::DROP,
+                                                               tracestate: parent.tracestate)
+      end
+
+      @sampler.should_sample?(trace_id: trace_id, parent_context: parent_context, links: links, name: name, kind: kind, attributes: attributes)
+    end
+
+    def description = "RootFilter{#{@sampler.description}}"
+  end
+
+  # Each run of a Rufus job is one trace. A job scheduled with trace: false, such as
+  # a check every minute that usually finds nothing to do, gets none.
+  module RufusJobTracing
+    def do_call(time, do_rescue)
+      return super if opts[:trace] == false
+
+      path, line = callable.source_location
+      attributes = { BACKGROUND_JOB => 'rufus', 'rufus.schedule' => original.to_s, 'code.filepath' => path, 'code.lineno' => line }.compact
+      RedmineObservability.tracer.in_span(path ? "Rufus #{File.basename(path)}:#{line}" : 'Rufus job', attributes: attributes) { super }
+    end
+  end
+
+  # An agent run works on its own thread, after its tick or request has ended, so it is
+  # a trace of its own; the chat request it posts joins that trace.
+  module AgentRunTracing
+    def run(agent, stamp)
+      attributes = { BACKGROUND_JOB => 'redmine_agent', 'agent.key' => agent['key'].to_s, 'agent.stamp' => stamp.to_s }
+      RedmineObservability.tracer.in_span('RedmineAgent run', attributes: attributes) { super }
+    end
   end
 
   # Traces SQL from Rails' sql.active_record events, for any database adapter.
