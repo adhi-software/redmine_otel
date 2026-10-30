@@ -4,7 +4,7 @@
 
 <%= title [l(:label_ob_observability), ob_traces_path], @root.name %>
 
-<div class="ob-trace-page">
+<div class="ob-page ob-trace-page">
 <div class="ob-card ob-summary">
   <dl class="ob-stats">
     <div><dt><%= l(:label_date) %></dt><dd><%= ob_time(@started_at) %></dd></div>
@@ -13,6 +13,9 @@
       <div><dt><%= l(:field_status) %></dt><dd><span class="ob-tag ob-status-<%= @root.http_status / 100 %>xx"><%= @root.http_status %></span></dd></div>
     <% end %>
     <div><dt><%= l(:label_ob_spans) %></dt><dd><%= @rows.size %></dd></div>
+    <% if @log_count > 0 %>
+      <div><dt><%= l(:label_ob_logs) %></dt><dd><%= link_to l(:label_ob_x_logs, count: @log_count), ob_logs_path(trace_id: params[:id], sort: 'logged_at') %></dd></div>
+    <% end %>
     <div><dt><%= l(:label_ob_trace_id) %></dt><dd><code><%= params[:id] %></code></dd></div>
     <% if @root.target %><div><dt><%= l(:label_ob_path) %></dt><dd><code><%= @root.target %></code></dd></div><% end %>
   </dl>
@@ -77,16 +80,13 @@
 </div>
 </div>
 
+<%= render 'observability/styles' %>
+
 <style type="text/css">
-  /* Sidebar-white theme colours; span categories checked for colour-blind contrast. */
+  /* Span categories, checked for colour-blind contrast. */
   .ob-trace-page {
     --ob-request: #0c66e4; --ob-sql: #1d9aaa; --ob-http: #c98500; --ob-other: #8590a2;
-    --ob-accent-soft: #e9f2ff; --ob-error: #c9372c; --ob-error-soft: #ffeceb;
-    --ob-success-text: #216e4e; --ob-success-soft: #dcfff1; --ob-warning-text: #a54800; --ob-warning-soft: #fff7d6;
-    --ob-text: #172b4d; --ob-text-subtle: #44546f; --ob-text-muted: #6b778c;
-    --ob-line: #dcdfe4; --ob-grid: #f1f2f4; --ob-surface: #ffffff; --ob-surface-subtle: #f7f8f9;
-    --ob-shadow: 0 1px 1px rgba(9, 30, 66, 0.13), 0 0 1px rgba(9, 30, 66, 0.2);
-    color: var(--ob-text); line-height: 1.45;
+    line-height: 1.45;
   }
   .ob-trace-page code { padding: 0; font-size: 0.95em; color: var(--ob-text); background: none; }
   .ob-card { margin-bottom: 16px; background: var(--ob-surface); border-radius: 8px; box-shadow: var(--ob-shadow); }
@@ -96,10 +96,6 @@
   .ob-stats dt { margin: 0 0 2px; font-size: 0.8em; font-weight: 600; color: var(--ob-text-muted); }
   .ob-stats dd { margin: 0; font-size: 1.05em; color: var(--ob-text); word-break: break-all; }
   .ob-error-message { margin: 12px 0 0; padding: 8px 12px; color: var(--ob-error); background: var(--ob-error-soft); border-radius: 6px; }
-  .ob-tag { display: inline-block; padding: 0 8px; line-height: 20px; font-size: 0.85em; font-weight: 600; border-radius: 10px; }
-  .ob-status-2xx, .ob-status-3xx { color: var(--ob-success-text); background: var(--ob-success-soft); }
-  .ob-status-4xx { color: var(--ob-warning-text); background: var(--ob-warning-soft); }
-  .ob-status-5xx { color: var(--ob-error); background: var(--ob-error-soft); }
 
   .ob-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 0 2px 10px; font-size: 0.9em; color: var(--ob-text-subtle); }
   .ob-legend > span { white-space: nowrap; }
@@ -136,11 +132,6 @@
   .ob-failed .ob-span-name { color: var(--ob-error); }
 
   .ob-details { padding: 6px 16px 12px 34px; background: var(--ob-surface-subtle); border-bottom: 1px solid var(--ob-line); }
-  .ob-attributes { display: grid; grid-template-columns: minmax(140px, 26%) minmax(0, 1fr); margin: 0; }
-  .ob-attributes dt, .ob-attributes dd { margin: 0; padding: 5px 0; border-bottom: 1px solid var(--ob-line); }
-  .ob-attributes dt { padding-right: 16px; color: var(--ob-text-muted); word-break: break-all; }
-  .ob-attributes dd { color: var(--ob-text); overflow-wrap: anywhere; }
-  .ob-attributes dt:nth-last-of-type(1), .ob-attributes dd:last-child { border-bottom: 0; }
   .ob-attributes pre { margin: 0; padding: 6px 8px; font-size: 12px; line-height: 1.5; white-space: pre-wrap; background: var(--ob-surface); border: 1px solid var(--ob-line); border-radius: 4px; }
   .ob-event { margin: 12px 0 2px; font-size: 13px; color: var(--ob-text); }
   .ob-event span { margin-left: 4px; font-weight: normal; color: var(--ob-text-muted); }

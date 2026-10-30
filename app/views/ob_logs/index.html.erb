@@ -1,0 +1,120 @@
+<%= render 'observability/header', tab: 'logs' %>
+
+<%= form_tag(ob_logs_path, method: :get, id: 'ob-search') do %>
+<fieldset class="ob-filters"><legend><%= l(:label_filter_plural) %></legend>
+  <span class="ob-filter">
+    <label for="level"><%= l(:label_ob_level) %>:</label>
+    <%= select_tag 'level', ob_level_options(params[:level]) %>
+  </span>
+  <span class="ob-filter">
+    <label for="q"><%= l(:label_search) %>:</label>
+    <%= text_field_tag 'q', params[:q], size: 25, placeholder: l(:label_ob_message) %>
+  </span>
+  <%= render 'observability/period_filter', period: params[:period] %>
+  <% if params[:trace_id].present? %>
+    <span class="ob-filter">
+      <%= hidden_field_tag 'trace_id', params[:trace_id] %>
+      <span class="ob-tag ob-filter-chip" title="<%= params[:trace_id] %>">
+        <%= l(:label_ob_trace_id) %> <%= params[:trace_id].to_s.first(7) %>
+        <%= link_to '×', ob_logs_path(filter_params.except('trace_id')), title: l(:button_clear), 'aria-label': l(:button_clear) %>
+      </span>
+    </span>
+  <% end %>
+  <span class="ob-filter">
+    <%= submit_tag l(:button_apply), class: 'small', name: nil %>
+    <%= link_to sprite_icon('reload', l(:button_clear)), ob_logs_path, class: 'icon icon-reload' %>
+  </span>
+</fieldset>
+<% end %>
+
+<div class="ob-page">
+<% if @logs.empty? %>
+  <p class="nodata"><%= l(:label_no_data) %></p>
+<% else %>
+  <div class="ob-results-header">
+    <strong><%= l(:label_ob_x_logs, count: @log_count) %></strong>
+    <%= delete_link ob_logs_path(filter_params), { class: 'icon icon-del ob-delete',
+                    data: { confirm: l(:text_ob_delete_logs, count: @log_count) } }, l(:label_ob_delete_all) %>
+    <label>
+      <%= l(:label_sort) %>:
+      <%= select_tag 'sort', ob_log_sort_options(@sort_criteria.to_param), form: 'ob-search', onchange: 'this.form.submit();' %>
+    </label>
+  </div>
+
+  <div class="ob-logs">
+    <% @logs.each do |log| %>
+      <div class="ob-log ob-level-<%= log.level %>" tabindex="0" role="button" aria-expanded="false">
+        <span class="ob-log-time" title="<%= ob_time(log.logged_at) %>"><%= ob_log_time(log.logged_at) %></span>
+        <span class="ob-level"><%= log.severity_text.presence || log.level.upcase %></span>
+        <span class="ob-log-message"><%= log.summary %><% if log.multiline? %> <span class="ob-more">…</span><% end %></span>
+        <% if log.trace_id %>
+          <%= link_to log.trace_id.first(7), ob_logs_path(trace_id: log.trace_id, sort: 'logged_at'),
+                      class: 'ob-log-trace', title: l(:text_ob_same_request) %>
+        <% else %>
+          <span></span>
+        <% end %>
+      </div>
+      <div class="ob-log-details" hidden>
+        <pre><%= log.body %></pre>
+        <dl class="ob-attributes">
+          <dt><%= l(:label_date) %></dt><dd><%= ob_time(log.logged_at) %> <span class="ob-ago"><%= l(:label_ob_ago, value: distance_of_time_in_words(Time.now, log.logged_at)) %></span></dd>
+          <% if log.trace_id %>
+            <dt><%= l(:label_ob_trace_id) %></dt>
+            <dd>
+              <code><%= log.trace_id %></code>
+              <% if @stored_traces.include?(log.trace_id) %>
+                <span class="ob-divider">|</span><%= link_to l(:label_ob_view_trace), ob_trace_path(log.trace_id) %>
+              <% end %>
+            </dd>
+          <% end %>
+          <% if log.span_id %><dt><%= l(:label_ob_span_id) %></dt><dd><code><%= log.span_id %></code></dd><% end %>
+          <% log.log_attributes.sort.each do |key, value| %>
+            <dt><%= key %></dt><dd><%= ob_value(value) %></dd>
+          <% end %>
+        </dl>
+      </div>
+    <% end %>
+  </div>
+
+  <span class="pagination"><%= pagination_links_full @log_pages, @log_count %></span>
+<% end %>
+</div>
+
+<style type="text/css">
+  .ob-logs { margin-bottom: 12px; background: var(--ob-surface); border-radius: 8px; box-shadow: var(--ob-shadow); overflow: hidden; }
+  /* Time, level, the first line of the message and the request's trace id. */
+  .ob-log { display: grid; grid-template-columns: auto 5.5em minmax(0, 1fr) auto; gap: 12px; align-items: baseline;
+            padding: 5px 12px; border-bottom: 1px solid var(--ob-grid); cursor: pointer; font-size: 13px; }
+  .ob-log:hover, .ob-log:focus-visible { background: var(--ob-surface-subtle); outline: none; }
+  .ob-log.is-open { background: var(--ob-accent-soft); border-bottom-color: transparent; }
+  .ob-log-time { white-space: nowrap; font-family: monospace; font-size: 12px; color: var(--ob-text-muted); }
+  .ob-level { padding: 0 4px; border-radius: 4px; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; color: var(--ob-text-subtle); background: var(--ob-grid); }
+  .ob-level-info .ob-level { color: var(--ob-accent); background: var(--ob-accent-soft); }
+  .ob-level-warn .ob-level { color: var(--ob-warning-text); background: var(--ob-warning-soft); }
+  .ob-level-error .ob-level, .ob-level-fatal .ob-level { color: var(--ob-error); background: var(--ob-error-soft); }
+  .ob-log-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 12px; color: var(--ob-text); }
+  .ob-level-error .ob-log-message, .ob-level-fatal .ob-log-message { color: var(--ob-error); }
+  .ob-level-debug .ob-log-message { color: var(--ob-text-subtle); }
+  .ob-more { color: var(--ob-text-muted); }
+  a.ob-log-trace { font-family: monospace; font-size: 12px; color: var(--ob-text-muted); }
+  a.ob-log-trace:hover { color: var(--ob-accent); }
+  .ob-log-details { padding: 8px 16px 12px; background: var(--ob-surface-subtle); border-bottom: 1px solid var(--ob-line); font-size: 13px; }
+  .ob-log-details pre { max-height: 400px; margin: 0 0 8px; padding: 8px 10px; overflow: auto; font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+                        background: var(--ob-surface); border: 1px solid var(--ob-line); border-radius: 4px; }
+  .ob-log-details code { padding: 0; background: none; }
+  .ob-log-details .ob-attributes pre { max-height: none; margin: 0; }
+</style>
+
+<%= javascript_tag do %>
+  $(function () {
+    $('.ob-logs').on('click keydown', '.ob-log', function (event) {
+      if ($(event.target).closest('a').length) return;
+      if (event.type === 'keydown') {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+      }
+      var open = $(this).toggleClass('is-open').hasClass('is-open');
+      $(this).attr('aria-expanded', open).next('.ob-log-details').prop('hidden', !open);
+    });
+  });
+<% end %>

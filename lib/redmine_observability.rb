@@ -1,16 +1,25 @@
+# frozen_string_literal: true
+
 require_relative 'database_exporter'
+require_relative 'database_log_exporter'
+require_relative 'database_metric_exporter'
 require_relative 'destinations'
 require_relative 'export_pipeline'
+require_relative 'instruments'
+require_relative 'log_bridge'
 
-# Applies the plugin settings; +pipeline+ and +sampler+ stay nil without the initializer.
+# Applies the plugin settings; +pipeline+, +sampler+, +log_bridge+ and +metric_exporter+
+# stay nil without the initializer.
 module RedmineObservability
-  # Days a stored trace is kept when the setting is blank.
+  # Days stored traces, logs and metrics are kept when the setting is blank.
   RETENTION_DAYS = 3
   # Marks a span that starts a trace for background work; see RootFilter.
   BACKGROUND_JOB = 'background.job'
+  # OpenTelemetry severity number of each Logger level, lowest first.
+  LOG_LEVELS = { 'debug' => 5, 'info' => 9, 'warn' => 13, 'error' => 17, 'fatal' => 21 }.freeze
 
   class << self
-    attr_accessor :pipeline, :sampler
+    attr_accessor :pipeline, :sampler, :log_bridge, :metric_exporter
 
     def tracer = OpenTelemetry.tracer_provider.tracer('redmine_observability')
 
@@ -18,8 +27,21 @@ module RedmineObservability
 
     def store_traces? = settings['store_traces'] == '1'
 
-    def retention_days
-      days = settings['retention_days'].to_i
+    def store_logs? = settings['store_logs'] == '1'
+
+    def store_metrics? = settings['store_metrics'] == '1'
+
+    # Lowest level of the log lines stored, as a Logger severity: Redmine's own log level,
+    # config.log_level. The bridge is one of Rails.logger's broadcasts, so its level is left out.
+    def log_level
+      loggers = Rails.logger.respond_to?(:broadcasts) ? Rails.logger.broadcasts : [Rails.logger]
+      loggers.reject { _1.equal?(log_bridge) }.map(&:level).min || ::Logger::INFO
+    end
+
+    # Days the stored +signal+ (traces, logs or metrics) is kept. Settings saved before each
+    # signal had its own keep using their shared retention_days until saved again.
+    def retention_days(signal)
+      days = (settings["#{signal}_retention_days"].presence || settings['retention_days']).to_i
       days.positive? ? days : RETENTION_DAYS
     end
 
@@ -29,20 +51,23 @@ module RedmineObservability
       store_traces? ? [*rows, Destinations::DATABASE_ROW] : rows
     end
 
-    # Runs on every request; does nothing when the destinations are unchanged.
-    def apply_destinations
+    # Runs on every request; rebuilds the destinations only when they change. The log bridge
+    # and metric exporter read these values instead of Setting, which can query the database.
+    def apply_settings
+      log_bridge&.level = store_logs? ? log_level : LogBridge::OFF
+      metric_exporter&.enabled = store_metrics?
       return unless pipeline&.update(destination_rows)
 
       OpenTelemetry.tracer_provider.sampler = pipeline.empty? ? OpenTelemetry::SDK::Trace::Samplers::ALWAYS_OFF : sampler
     rescue StandardError => e
-      Rails.logger.warn("redmine_observability: could not apply destinations: #{e.message}")
+      Rails.logger.warn("redmine_observability: could not apply settings: #{e.message}")
     end
   end
 
-  # Settings are re-checked on each request, so every process picks up new destinations.
+  # Settings are re-checked on each request, so every process picks up changes.
   module SettingCachePatch
     def check_cache
-      super.tap { RedmineObservability.apply_destinations }
+      super.tap { RedmineObservability.apply_settings }
     end
   end
 
@@ -70,7 +95,7 @@ module RedmineObservability
   # Starts a trace only at a request, a job or a span marked with BACKGROUND_JOB, so SQL
   # from boot or a background poll is dropped instead of saved one query per trace.
   class RootFilter
-    ROOT_KINDS = %i[server consumer].freeze
+    ROOT_KINDS = [:server, :consumer].freeze
 
     def initialize(sampler)
       @sampler = sampler

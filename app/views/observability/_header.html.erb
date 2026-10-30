@@ -1,0 +1,18 @@
+<%# Title, warnings and tabs above each tab of Redmine Observability; +tab+ is traces, logs or metrics. %>
+<div class="contextual">
+  <%= link_to sprite_icon('settings', l(:label_settings)), plugin_settings_path('redmine_observability'), class: 'icon icon-settings' %>
+</div>
+
+<%= title l(:label_ob_observability) %>
+
+<% if !RedmineObservability.pipeline %>
+  <div class="flash warning"><%= l(:text_ob_not_loaded) %></div>
+<% elsif !RedmineObservability.public_send(:"store_#{tab}?") %>
+  <div class="flash warning"><%= l(:"text_ob_#{tab}_off") %></div>
+<% end %>
+
+<%= render_tabs [{ name: 'traces', label: :label_ob_traces, url: ob_traces_path },
+                 { name: 'logs', label: :label_ob_logs, url: ob_logs_path },
+                 { name: 'metrics', label: :label_ob_metrics, url: ob_metrics_path }], tab %>
+
+<%= render 'observability/styles' %>

@@ -1,0 +1,25 @@
+<%# Period select of a filter form, with From and To dates shown for a custom range. %>
+<span class="ob-filter">
+  <label for="period"><%= l(:label_ob_period) %>:</label>
+  <%= select_tag 'period', ob_period_options(period) %>
+</span>
+<% custom = period == 'custom' %>
+<span id="ob-custom-range" style="<%= 'display: none;' unless custom %>">
+  <span class="ob-filter">
+    <label for="from"><%= l(:label_ob_from) %>:</label>
+    <%= date_field_tag 'from', params[:from], disabled: !custom %><%= calendar_for('from') %>
+  </span>
+  <span class="ob-filter">
+    <label for="to"><%= l(:label_ob_to) %>:</label>
+    <%= date_field_tag 'to', params[:to], disabled: !custom %><%= calendar_for('to') %>
+  </span>
+</span>
+
+<%= javascript_tag do %>
+  $(function () {
+    $('#period').on('change', function () {
+      var custom = this.value === 'custom';
+      $('#ob-custom-range').toggle(custom).find('input').prop('disabled', !custom);
+    });
+  });
+<% end %>

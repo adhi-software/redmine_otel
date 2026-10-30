@@ -1,30 +1,13 @@
-# Administration > Redmine Observability: traces saved by DatabaseExporter.
-class ObTracesController < ApplicationController
-  layout 'admin'
-  self.main_menu = false
+# frozen_string_literal: true
+
+# Administration > Redmine Observability > Traces: spans saved by DatabaseExporter.
+class ObTracesController < ObBaseController
   menu_item :ob_traces
-
-  before_action :require_admin
-
-  helper :sort
-  include SortHelper
-  helper :ob_traces
-
-  # Period filter lookbacks; 'custom' uses the From and To dates.
-  PERIODS = {
-    '1h' => 1.hour, '2h' => 2.hours, '6h' => 6.hours, '12h' => 12.hours,
-    '24h' => 24.hours, '2d' => 2.days, '7d' => 7.days
-  }.freeze
 
   # Microseconds per duration unit, as in 1.2s or 100ms; a bare number is ms.
   DURATION_UNITS = { 'us' => 1, 'µs' => 1, 'ms' => 1000, 's' => 1_000_000, 'm' => 60_000_000 }.freeze
 
-  # Query parameters of the filter form, kept when deleting the listed traces.
   FILTERS = %w[type q period from to min_duration max_duration errors].freeze
-
-  TRACE_ID = /\A\h{32}\z/
-
-  helper_method :filter_params
 
   def index
     sort_init 'started_at', 'desc'
@@ -47,6 +30,7 @@ class ObTracesController < ApplicationController
     @root = spans.find(&:root?) || @rows.first.first
     @started_at = spans.map(&:started_at).min
     @duration_us = ((spans.map(&:ended_at).max - @started_at) * 1_000_000).round
+    @log_count = ObLog.where(trace_id: params[:id]).count
   end
 
   # Deletes the traces checked in the list (ids[]), or without ids every trace matching
@@ -68,10 +52,6 @@ class ObTracesController < ApplicationController
 
   private
 
-  def filter_params
-    request.query_parameters.slice(*FILTERS).compact_blank
-  end
-
   def filtered_roots
     scope = ObSpan.roots
     scope = case params[:type]
@@ -92,23 +72,6 @@ class ObTracesController < ApplicationController
       scope = scope.where(table[:name].matches(pattern).or(table[:target].matches(pattern)))
     end
     scope
-  end
-
-  # [from, to] of the period filter, either may be nil; custom dates are whole days in the user's zone.
-  def period_range
-    return [PERIODS[params[:period]]&.ago, nil] unless params[:period] == 'custom'
-
-    zone = User.current.time_zone || Time.zone
-    from = date_param(:from)&.in_time_zone(zone)
-    to = date_param(:to)&.in_time_zone(zone)&.end_of_day
-    from, to = to.beginning_of_day, from.end_of_day if from && to && from > to
-    [from, to]
-  end
-
-  def date_param(name)
-    Date.iso8601(params[name].to_s)
-  rescue ArgumentError
-    nil
   end
 
   def duration_param(name)

@@ -6,3 +6,7 @@ gem 'opentelemetry-instrumentation-rails'
 # Hides literals in the SQL that SqlSubscriber traces.
 gem 'opentelemetry-helpers-sql-processor'
 gem 'opentelemetry-instrumentation-net_http'
+gem 'opentelemetry-metrics-sdk'
+gem 'opentelemetry-exporter-otlp-metrics'
+gem 'opentelemetry-logs-sdk'
+gem 'opentelemetry-exporter-otlp-logs'

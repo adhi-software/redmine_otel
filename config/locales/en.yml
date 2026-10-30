@@ -5,17 +5,28 @@ en:
   label_ob_format: Format
   label_ob_endpoint: Endpoint
   label_ob_headers: Headers
-  text_ob_destinations: Every request, SQL query and outgoing HTTP call is sent to each destination. Install and run the tracing backend yourself, then add its URL here. Changes apply without a restart.
+  text_ob_destinations: Every request, SQL query and outgoing HTTP call is sent to each destination's endpoint, and nowhere else; with none listed, nothing is sent. Install and run the tracing backend yourself, then add its endpoint here. Changes apply without a restart.
   text_ob_headers: "Comma-separated key=value pairs, e.g. api-key=YOUR_KEY"
   text_ob_select_row: Select a destination first.
   text_ob_invalid_endpoint: Enter an endpoint URL that starts with http:// or https://.
   text_ob_not_loaded: "Tracing is off because the plugin was not loaded when Redmine started. Run bundle install and restart Redmine."
-  label_ob_storage: Traces in Redmine
+  label_ob_storage: Store data
   label_ob_store_traces: Store traces
-  text_ob_store_traces: Saves every request, SQL query and outgoing HTTP call to the Redmine database, to view under Administration » Redmine Observability. Destinations below still receive them.
-  label_ob_retention_days: Keep for (days)
+  text_ob_store_traces: Requests, SQL queries and HTTP calls, shown in
+  label_ob_store_logs: Store logs
+  text_ob_store_logs: Log lines, with the request that wrote them.
+  text_ob_log_level: "Level: %{level}, from config.log_level."
+  text_ob_log_level_debug: Debug includes SQL values such as API tokens.
+  label_ob_store_metrics: Store metrics
+  text_ob_store_metrics: Request and SQL durations, threads, connections and memory, every minute.
+  label_ob_keep_for: Keep for
   text_ob_traces_off: Traces are not being stored. Turn on "Store traces" in the plugin settings.
+  text_ob_logs_off: Logs are not being stored. Turn on "Store logs" in the plugin settings.
+  text_ob_metrics_off: Metrics are not being stored. Turn on "Store metrics" in the plugin settings.
   label_ob_observability: Redmine Observability
+  label_ob_traces: Traces
+  label_ob_logs: Logs
+  label_ob_metrics: Metrics
   label_ob_web_requests: Web requests
   label_ob_background: Background work
   label_ob_period: Period
@@ -59,7 +70,6 @@ en:
   label_ob_spans: Spans
   label_ob_span: Span
   label_ob_trace_id: Trace ID
-  label_ob_timeline: Timeline
   label_ob_offset: Starts at
   label_ob_request: Request
   label_ob_sql: SQL
@@ -69,3 +79,41 @@ en:
   label_ob_ok: OK
   text_ob_chart_hint: Each dot is a trace; bigger dots have more spans.
   text_ob_click_span: Click a span to see its details.
+  label_ob_level: Level
+  label_ob_all_levels: All levels
+  label_ob_level_at_least: "%{level} and above"
+  label_ob_level_debug: Debug
+  label_ob_level_info: Info
+  label_ob_level_warn: Warning
+  label_ob_level_error: Error
+  label_ob_level_fatal: Fatal
+  label_ob_level_unknown: Unknown
+  label_ob_message: Message
+  label_ob_x_logs:
+    one: 1 log line
+    other: "%{count} log lines"
+  text_ob_delete_logs:
+    one: Delete the log line matching these filters? This cannot be undone.
+    other: "Delete the %{count} log lines matching these filters, on every page? This cannot be undone."
+  notice_ob_logs_deleted:
+    one: 1 log line deleted.
+    other: "%{count} log lines deleted."
+  text_ob_same_request: Show the log lines of this request
+  label_ob_view_trace: View trace
+  label_ob_span_id: Span ID
+  label_ob_metric: Metric
+  label_ob_series: Series
+  label_ob_x_series:
+    one: 1 series
+    other: "%{count} series"
+  label_ob_no_attributes: All
+  label_ob_count: Count
+  label_ob_average: Average
+  label_ob_max: Max
+  label_ob_total: Total
+  text_ob_bucket: "Each point covers %{value}."
+  text_ob_click_series: Chart this series alone
+  text_ob_delete_metric: Delete this metric's data matching these filters? This cannot be undone.
+  notice_ob_metrics_deleted:
+    one: 1 data point deleted.
+    other: "%{count} data points deleted."

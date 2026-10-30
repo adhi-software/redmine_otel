@@ -1,0 +1,166 @@
+<%= render 'observability/header', tab: 'metrics' %>
+
+<%= form_tag(ob_metrics_path, method: :get, id: 'ob-search') do %>
+<fieldset class="ob-filters"><legend><%= l(:label_filter_plural) %></legend>
+  <span class="ob-filter">
+    <label for="name"><%= l(:label_ob_metric) %>:</label>
+    <%# A series belongs to one metric, so choosing another drops it. %>
+    <%= select_tag 'name', options_for_select(@names, @name), onchange: "$('#series').remove(); this.form.submit();" %>
+  </span>
+  <%= render 'observability/period_filter', period: @period %>
+  <% if params[:series].present? %>
+    <span class="ob-filter">
+      <%= hidden_field_tag 'series', params[:series] %>
+      <span class="ob-tag ob-filter-chip" title="<%= params[:series] %>">
+        <%= l(:label_ob_series) %>: <%= ObMetric.labels(params[:series]).values.join(' · ').truncate(80) %>
+        <%= link_to '×', ob_metrics_path(filter_params.except('series')), title: l(:button_clear), 'aria-label': l(:button_clear) %>
+      </span>
+    </span>
+  <% end %>
+  <span class="ob-filter">
+    <%= submit_tag l(:button_apply), class: 'small', name: nil %>
+    <%= link_to sprite_icon('reload', l(:button_clear)), ob_metrics_path, class: 'icon icon-reload' %>
+  </span>
+</fieldset>
+<% end %>
+
+<div class="ob-page">
+<% if @summary.nil? %>
+  <p class="nodata"><%= l(:label_no_data) %></p>
+<% else %>
+  <% unit = @latest.unit %>
+  <% stats = ob_metric_stats(@summary, @shape, unit) %>
+  <div class="ob-chart">
+    <div class="ob-chart-head">
+      <div>
+        <strong><%= @name %></strong>
+        <span class="ob-chart-note"><%= [@latest.description, l(:text_ob_bucket, value: ob_bucket_label(@bucket_size))].compact.join(' · ') %></span>
+      </div>
+    </div>
+    <dl class="ob-metric-stats">
+      <% stats.each do |label, value| %>
+        <div><dt><%= label %></dt><dd><%= value %></dd></div>
+      <% end %>
+    </dl>
+    <div class="ob-chart-plot ob-metric-plot">
+      <%= content_tag :canvas, '', id: 'ob-metric-chart', role: 'img', 'aria-label': @name,
+                      data: { points: @points.to_json, shape: @shape, unit: unit, zone: ob_zone_name, labels: ob_chart_labels.to_json } %>
+    </div>
+  </div>
+
+  <div class="ob-results-header">
+    <strong><%= l(:label_ob_x_series, count: @series_count) %></strong>
+    <%= delete_link ob_metrics_path(filter_params), { class: 'icon icon-del ob-delete',
+                    data: { confirm: l(:text_ob_delete_metric) } }, l(:label_ob_delete_all) %>
+  </div>
+  <div class="autoscroll">
+    <table class="list ob-series">
+      <thead>
+        <tr>
+          <th class="ob-series-name"><%= l(:label_ob_series) %></th>
+          <% stats.each do |label, _| %><th class="ob-number"><%= label %></th><% end %>
+        </tr>
+      </thead>
+      <tbody>
+        <% @series.each do |series, summary| %>
+          <tr class="<%= 'ob-selected' if series == params[:series] %>">
+            <td class="ob-series-name">
+              <%= link_to ob_series_labels(series), ob_metrics_path(filter_params.merge('series' => series)), title: l(:text_ob_click_series) %>
+            </td>
+            <% ob_metric_stats(summary, @shape, unit).each do |_, value| %><td class="ob-number"><%= value %></td><% end %>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+<% end %>
+</div>
+
+<style type="text/css">
+  .ob-metric-stats { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 4px 0 12px; }
+  .ob-metric-stats dt { margin: 0 0 2px; font-size: 0.8em; font-weight: 600; color: var(--ob-text-muted); }
+  .ob-metric-stats dd { margin: 0; font-size: 1.3em; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ob-text); }
+  .ob-chart-plot.ob-metric-plot { height: 240px; }
+  table.ob-series th.ob-series-name, table.ob-series td.ob-series-name { text-align: left; }
+  table.ob-series .ob-number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.ob-series tr.ob-selected td { background: var(--ob-accent-soft); }
+  table.ob-series a:hover { text-decoration: none; }
+  table.ob-series a:hover .ob-label { box-shadow: inset 0 0 0 1px var(--ob-accent); }
+  .ob-label { display: inline-block; margin: 1px 6px 1px 0; padding: 0 6px; line-height: 20px; border-radius: 4px; white-space: nowrap; color: var(--ob-text); background: var(--ob-grid); }
+  .ob-label-key { margin-right: 4px; font-size: 0.85em; color: var(--ob-text-muted); }
+  .ob-label.ob-status-2xx, .ob-label.ob-status-3xx { color: var(--ob-success-text); background: var(--ob-success-soft); }
+  .ob-label.ob-status-4xx { color: var(--ob-warning-text); background: var(--ob-warning-soft); }
+  .ob-label.ob-status-5xx { color: var(--ob-error); background: var(--ob-error-soft); }
+</style>
+
+<%# Chart.js from Redmine's importmap. %>
+<%= javascript_tag type: 'module' do %>
+  const canvas = document.getElementById('ob-metric-chart');
+  if (canvas) import('chart.js').then(({ default: Chart }) => {
+    const points = JSON.parse(canvas.dataset.points);
+    const labels = JSON.parse(canvas.dataset.labels);
+    const { shape, unit } = canvas.dataset;
+    const style = getComputedStyle(canvas);
+    const color = (name) => style.getPropertyValue(name).trim();
+    const xs = points.map((p) => p.x);
+    const lang = document.documentElement.lang || undefined;
+    const clock = { timeZone: canvas.dataset.zone || undefined, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
+    const day = { month: 'short', day: 'numeric' };
+    const tick = new Intl.DateTimeFormat(lang, xs[xs.length - 1] - xs[0] < 86400000 ? clock : Object.assign({}, clock, day));
+    const fullTime = new Intl.DateTimeFormat(lang, Object.assign({}, clock, day));
+    // Same formats as ob_metric_value.
+    const duration = (ms) => ms === 0 ? '0' : ms >= 1000 ? `${+(ms / 1000).toFixed(2)} s` : `${+ms.toFixed(ms < 10 ? 2 : 1)} ms`;
+    const bytes = (b) => b >= 1073741824 ? `${+(b / 1073741824).toFixed(2)} GB` : b >= 1048576 ? `${+(b / 1048576).toFixed(1)} MB` : `${+(b / 1024).toFixed(1)} KB`;
+    const format = (v) => v == null ? '' : unit === 's' ? duration(v * 1000) : unit === 'ms' ? duration(v)
+      : unit === 'By' ? bytes(v) : (+v.toFixed(2)).toLocaleString(lang);
+    const line = (key, name, dashed) => ({
+      type: 'line', label: labels[key], data: points.map((p) => p[key]), yAxisID: 'y', order: 1,
+      borderColor: color(name), backgroundColor: color(name), borderWidth: 2, borderDash: dashed ? [4, 3] : [],
+      pointStyle: 'line', pointRadius: 0, pointHitRadius: 6, tension: 0.2, spanGaps: false
+    });
+    const bar = (key, name, axis) => ({
+      type: 'bar', label: labels[key], data: points.map((p) => p[key]), yAxisID: axis, order: 2,
+      backgroundColor: color(name), hoverBackgroundColor: color(name), pointStyle: 'rect', barPercentage: 1, categoryPercentage: 0.9
+    });
+    // Histograms: average and max durations as lines over the count of measurements as bars.
+    const datasets = shape === 'histogram' ? [line('average', '--ob-accent'), line('max', '--ob-warning-text', true), bar('count', '--ob-accent-soft', 'count')]
+      : shape === 'sum' ? [bar('total', '--ob-accent', 'y')]
+      : [line('average', '--ob-accent'), line('max', '--ob-warning-text', true)];
+    const scales = {
+      x: { grid: { display: false }, border: { color: color('--ob-line') },
+           ticks: { maxTicksLimit: 8, maxRotation: 0, autoSkipPadding: 12, callback: (value) => tick.format(xs[value]) } },
+      y: { beginAtZero: true, grace: '10%', border: { display: false }, grid: { color: color('--ob-grid'), drawTicks: false },
+           ticks: { maxTicksLimit: 5, padding: 8, callback: format } }
+    };
+    if (shape === 'histogram') {
+      scales.count = { position: 'right', beginAtZero: true, grace: '10%', border: { display: false }, grid: { display: false },
+                       ticks: { maxTicksLimit: 5, precision: 0 } };
+    }
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    Chart.defaults.color = color('--ob-text-muted');
+
+    new Chart(canvas, {
+      type: 'bar',
+      data: { labels: xs, datasets },
+      options: {
+        maintainAspectRatio: false,
+        animation: { duration: 250 },
+        interaction: { mode: 'index', intersect: false },
+        scales,
+        plugins: {
+          // Point styles draw lines as lines and bars as squares; the points themselves are hidden.
+          legend: { position: 'bottom', align: 'end', labels: { usePointStyle: true, boxWidth: 18, boxHeight: 10 } },
+          tooltip: {
+            backgroundColor: color('--ob-text'), titleColor: '#fff', bodyColor: color('--ob-line'),
+            padding: 10, cornerRadius: 6, caretSize: 5, boxPadding: 4,
+            filter: (item) => item.raw != null,
+            callbacks: {
+              title: (items) => fullTime.format(xs[items[0].dataIndex]),
+              label: (item) => `${item.dataset.label}: ${item.dataset.yAxisID === 'count' ? item.raw.toLocaleString(lang) : format(item.raw)}`
+            }
+          }
+        }
+      }
+    });
+  });
+<% end %>

@@ -1,11 +1,14 @@
+# frozen_string_literal: true
+
 require 'json'
 require 'uri'
 
 module RedmineObservability
   # Saved rows are JSON with name, format, endpoint and headers.
   module Destinations
-    # +exporter+ is a proc (endpoint, headers) -> span exporter; +endpoint+ is an example.
-    Format = Struct.new(:key, :label, :endpoint, :exporter, keyword_init: true)
+    # +exporter+ is a proc (endpoint, headers) -> span exporter. +name+ and +endpoint+ are examples,
+    # shown greyed in the dialog's empty fields; spans only go to an endpoint the admin enters.
+    Format = Struct.new(:key, :label, :name, :endpoint, :exporter, keyword_init: true)
 
     # Older rows are "type|endpoint|headers" or JSON with a type.
     Row = Struct.new(:name, :format, :endpoint, :headers) do
@@ -18,9 +21,9 @@ module RedmineObservability
     end
 
     FORMATS = [
-      Format.new(key: 'otlp', label: 'OTLP', endpoint: 'http://localhost:4318/v1/traces',
+      Format.new(key: 'otlp', label: 'OTLP', name: 'Jaeger', endpoint: 'http://localhost:4318/v1/traces',
                  exporter: ->(endpoint, headers) { OpenTelemetry::Exporter::OTLP::Exporter.new(endpoint: endpoint, headers: headers) }),
-      Format.new(key: 'zipkin', label: 'Zipkin', endpoint: 'http://localhost:9411/api/v2/spans',
+      Format.new(key: 'zipkin', label: 'Zipkin', name: 'Zipkin', endpoint: 'http://localhost:9411/api/v2/spans',
                  exporter: ->(endpoint, headers) { OpenTelemetry::Exporter::Zipkin::Exporter.new(endpoint: endpoint, headers: headers) })
     ].freeze
 

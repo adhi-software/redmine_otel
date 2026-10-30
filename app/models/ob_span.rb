@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # A span saved by DatabaseExporter.
 class ObSpan < ApplicationRecord
   scope :roots, -> { where(root: true) }

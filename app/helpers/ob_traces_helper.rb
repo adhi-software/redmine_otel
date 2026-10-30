@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ObTracesHelper
   # Date and time to the second, in the user's time zone.
   def ob_time(time)

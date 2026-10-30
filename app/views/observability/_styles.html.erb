@@ -1,0 +1,44 @@
+<%# Colours and parts shared by every page of Redmine Observability, inside an .ob-page element. %>
+<style type="text/css">
+  /* Colours of the sidebar-white theme; the charts read them too. */
+  .ob-page {
+    --ob-accent: #0c66e4; --ob-accent-hover: #0055cc; --ob-accent-soft: #e9f2ff;
+    --ob-error: #c9372c; --ob-error-hover: #ae2e24; --ob-error-soft: #ffeceb;
+    --ob-success: #22a06b; --ob-success-text: #216e4e; --ob-success-soft: #dcfff1;
+    --ob-warning: #e2b203; --ob-warning-text: #a54800; --ob-warning-soft: #fff7d6;
+    --ob-text: #172b4d; --ob-text-subtle: #44546f; --ob-text-muted: #6b778c;
+    --ob-line: #dcdfe4; --ob-grid: #f1f2f4; --ob-surface: #ffffff; --ob-surface-subtle: #f7f8f9;
+    --ob-shadow: 0 1px 1px rgba(9, 30, 66, 0.13), 0 0 1px rgba(9, 30, 66, 0.2);
+    color: var(--ob-text);
+  }
+  .ob-filters { margin-bottom: 16px; }
+  /* Keeps each label with its field when the row wraps. */
+  .ob-filter { display: inline-block; margin: 2px 14px 2px 0; white-space: nowrap; }
+  .ob-filter-chip a { margin-left: 4px; color: inherit; }
+
+  .ob-chart { margin-bottom: 16px; padding: 12px 16px 8px; background: var(--ob-surface); border-radius: 8px; box-shadow: var(--ob-shadow); }
+  .ob-chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 16px; margin-bottom: 8px; }
+  .ob-chart-head strong { margin-right: 8px; color: var(--ob-text); }
+  .ob-chart-note { font-size: 0.85em; color: var(--ob-text-muted); }
+  .ob-chart-plot { position: relative; height: 180px; }
+
+  .ob-results-header { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; color: var(--ob-text-subtle); }
+  .ob-results-header strong { margin-right: auto; font-size: 1.2em; color: var(--ob-text); }
+  /* flex: none undoes the theme's a.icon { flex: 10px }, which stretched the link across the row. */
+  .ob-results-header a.ob-delete { flex: none; color: var(--ob-text-subtle); }
+  .ob-results-header a.ob-delete:hover { color: var(--ob-error); text-decoration: none; }
+
+  .ob-tag { display: inline-block; padding: 0 8px; line-height: 20px; font-size: 0.85em; font-weight: 600; white-space: nowrap; color: var(--ob-text-subtle); background: var(--ob-grid); border-radius: 10px; }
+  .ob-tag-error { color: var(--ob-error); background: var(--ob-error-soft); }
+  .ob-status-2xx, .ob-status-3xx { color: var(--ob-success-text); background: var(--ob-success-soft); }
+  .ob-status-4xx { color: var(--ob-warning-text); background: var(--ob-warning-soft); }
+  .ob-status-5xx { color: var(--ob-error); background: var(--ob-error-soft); }
+  .ob-divider { margin: 0 6px; color: var(--ob-line); }
+  .ob-ago { margin-left: 8px; color: var(--ob-text-muted); font-size: 0.9em; }
+
+  .ob-attributes { display: grid; grid-template-columns: minmax(140px, 26%) minmax(0, 1fr); margin: 0; }
+  .ob-attributes dt, .ob-attributes dd { margin: 0; padding: 5px 0; border-bottom: 1px solid var(--ob-line); }
+  .ob-attributes dt { padding-right: 16px; color: var(--ob-text-muted); word-break: break-all; }
+  .ob-attributes dd { color: var(--ob-text); overflow-wrap: anywhere; }
+  .ob-attributes dt:nth-last-of-type(1), .ob-attributes dd:last-child { border-bottom: 0; }
+</style>

@@ -1,4 +1,6 @@
-# ERPmine Observability - request, SQL and HTTP tracing for Redmine / ERPmine
+# frozen_string_literal: true
+
+# ERPmine Observability - request, SQL and HTTP traces, logs and metrics for Redmine / ERPmine
 # Copyright (C) 2026
 #
 # This program is free software; you can redistribute it and/or
@@ -10,23 +12,29 @@
 
 require_relative 'lib/redmine_observability'
 
-# Destination headers hold API keys; keep them out of the logs.
+# Keeps API keys out of the logs, and so out of stored log lines: destination headers, and the
+# ?key= the mobile client sends. Only a parameter named exactly key, so api_key and the like stay readable.
 filters = Rails.application.config.filter_parameters
-filters << :destinations unless filters.include?(:destinations)
+[:destinations, /\Akey\z/].each { |filter| filters << filter unless filters.include?(filter) }
 
 Redmine::Plugin.register :redmine_observability do
   name 'Redmine Observability'
   author 'Adhi Software Pvt Ltd'
-  description 'Sends request, SQL and HTTP traces to one or more tracing backends'
+  description 'Stores request, SQL and HTTP traces, logs and metrics in Redmine, and sends traces to tracing backends'
   version '1.0'
-  author_url 'http://www.adhisoftware.co.in/'
+  author_url 'https://www.adhisoftware.co.in/'
 
   settings partial: 'settings/observability', default: {
     # JSON rows of name, format, endpoint and headers; every span goes to each one.
     'destinations' => [],
-    # '1' also saves every span to the database, shown under Administration > Redmine Observability.
+    # '1' saves that signal to the database, shown under Administration > Redmine Observability,
+    # for its retention days.
     'store_traces' => '0',
-    'retention_days' => RedmineObservability::RETENTION_DAYS.to_s
+    'traces_retention_days' => RedmineObservability::RETENTION_DAYS.to_s,
+    'store_logs' => '0',
+    'logs_retention_days' => RedmineObservability::RETENTION_DAYS.to_s,
+    'store_metrics' => '0',
+    'metrics_retention_days' => RedmineObservability::RETENTION_DAYS.to_s
   }
 
   menu :admin_menu, :ob_traces, { controller: 'ob_traces', action: 'index' },
@@ -40,4 +48,4 @@ Setting.singleton_class.prepend(RedmineObservability::SettingCachePatch)
 Rufus::Scheduler::Job.prepend(RedmineObservability::RufusJobTracing) if defined?(Rufus::Scheduler::Job)
 RedmineAgent::Runner.singleton_class.prepend(RedmineObservability::AgentRunTracing) if defined?(RedmineAgent::Runner)
 
-Rails.application.config.after_initialize { RedmineObservability.apply_destinations }
+Rails.application.config.after_initialize { RedmineObservability.apply_settings }
