@@ -2,29 +2,25 @@
 
 require 'etc'
 
-module RedmineObservability
+module RedmineOpentelemetry
   # Records request, SQL and process metrics, which DatabaseMetricExporter saves each minute.
   module Instruments
-    # Bucket bounds in seconds: OpenTelemetry's advice for HTTP durations, and a finer set for SQL.
+    # Histogram bucket bounds, in seconds.
     REQUEST_BOUNDS = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10].freeze
     QUERY_BOUNDS = [0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5].freeze
-    # db.operation.name values; any other statement counts as OTHER.
     OPERATIONS = %w[SELECT INSERT UPDATE DELETE].freeze
-    # sql.active_record events that are not queries of Redmine's data.
     SKIPPED_QUERIES = %w[SCHEMA TRANSACTION].freeze
-    # Linux only; elsewhere the memory gauge is left out.
-    STATM = '/proc/self/statm'.freeze
+    STATM = '/proc/self/statm'
 
     class << self
       def install(meter_provider)
-        # Delta, so each saved point holds one interval and points add up across processes.
         histogram = OpenTelemetry::SDK::Metrics::Aggregation::ExplicitBucketHistogram
         meter_provider.add_view('http.server.request.duration',
                                 aggregation: histogram.new(aggregation_temporality: :delta, boundaries: REQUEST_BOUNDS))
         meter_provider.add_view('db.client.operation.duration',
                                 aggregation: histogram.new(aggregation_temporality: :delta, boundaries: QUERY_BOUNDS))
 
-        meter = meter_provider.meter('redmine_observability')
+        meter = meter_provider.meter('redmine_opentelemetry')
         requests = meter.create_histogram('http.server.request.duration', unit: 's',
                                           description: 'Time to handle a request, per controller action')
         queries = meter.create_histogram('db.client.operation.duration', unit: 's', description: 'Time of a SQL query')
@@ -38,10 +34,10 @@ module RedmineObservability
         end
 
         ActiveSupport::Notifications.monotonic_subscribe('process_action.action_controller') do |_name, start, finish, _id, payload|
-          requests.record(finish - start, attributes: request_attributes(payload)) if storing?
+          requests.record(finish - start, attributes: request_attributes(payload)) if RedmineOpentelemetry.record_metrics
         end
         ActiveSupport::Notifications.monotonic_subscribe('sql.active_record') do |_name, start, finish, _id, payload|
-          next unless storing?
+          next unless RedmineOpentelemetry.record_metrics
           next if payload[:cached] || SKIPPED_QUERIES.include?(payload[:name]) || OpenTelemetry::Common::Utilities.untraced?
 
           queries.record(finish - start, attributes: query_attributes(payload))
@@ -49,9 +45,6 @@ module RedmineObservability
       end
 
       private
-
-      # Measurements are dropped while "Store metrics" is off, so none are taken.
-      def storing? = RedmineObservability.metric_exporter&.enabled
 
       # A request that raised has no status yet; it gets the one Rails will answer with.
       def request_attributes(payload)

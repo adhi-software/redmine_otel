@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# Administration > Redmine Observability > Traces: spans saved by DatabaseExporter.
-class ObTracesController < ObBaseController
-  menu_item :ob_traces
+# Traces tab: spans saved by DatabaseExporter.
+class OtTracesController < OtBaseController
+  menu_item :ot_traces
 
-  # Microseconds per duration unit, as in 1.2s or 100ms; a bare number is ms.
+  # Microseconds per duration unit; a bare number is ms.
   DURATION_UNITS = { 'us' => 1, 'µs' => 1, 'ms' => 1000, 's' => 1_000_000, 'm' => 60_000_000 }.freeze
 
   FILTERS = %w[type q period from to min_duration max_duration errors].freeze
@@ -17,43 +17,42 @@ class ObTracesController < ObBaseController
     @trace_count = scope.count
     @trace_pages = Paginator.new @trace_count, per_page_option, params['page']
     @traces = scope.reorder(sort_clause).limit(@trace_pages.per_page).offset(@trace_pages.offset).to_a
-    spans = ObSpan.where(trace_id: @traces.map(&:trace_id))
+    spans = OtSpan.where(trace_id: @traces.map(&:trace_id))
     @span_counts = spans.group(:trace_id).count
     @error_counts = spans.where(error: true).or(spans.where(http_status: 500..)).group(:trace_id).count
   end
 
   def show
-    spans = ObSpan.where(trace_id: params[:id]).order(:started_at, :id).to_a
+    spans = OtSpan.where(trace_id: params[:id]).order(:started_at, :id).to_a
     return render_404 if spans.empty?
 
-    @rows = ObSpan.waterfall(spans)
+    @rows = OtSpan.waterfall(spans)
     @root = spans.find(&:root?) || @rows.first.first
     @started_at = spans.map(&:started_at).min
     @duration_us = ((spans.map(&:ended_at).max - @started_at) * 1_000_000).round
-    @log_count = ObLog.where(trace_id: params[:id]).count
+    @log_count = OtLog.where(trace_id: params[:id]).count
   end
 
-  # Deletes the traces checked in the list (ids[]), or without ids every trace matching
-  # the filters on all pages, with all of their spans.
+  # Deletes the checked traces (ids[]), or without ids every trace matching the filters.
   def destroy_all
-    scope = params.key?(:ids) ? ObSpan.roots.where(trace_id: Array(params[:ids]).grep(TRACE_ID)) : filtered_roots
+    scope = params.key?(:ids) ? OtSpan.roots.where(trace_id: Array(params[:ids]).grep(TRACE_ID)) : filtered_roots
+    # Plucked first: MySQL cannot delete from ot_spans with a subquery on ot_spans.
     trace_ids = scope.pluck(:trace_id)
-    # Plucked first: MySQL cannot delete from ob_spans with a subquery on ob_spans.
-    trace_ids.each_slice(1000) { ObSpan.where(trace_id: _1).delete_all }
-    flash[:notice] = l(:notice_ob_traces_deleted, count: trace_ids.size)
-    redirect_to ob_traces_path(filter_params)
+    trace_ids.each_slice(1000) { OtSpan.where(trace_id: _1).delete_all }
+    flash[:notice] = l(:notice_ot_traces_deleted, count: trace_ids.size)
+    redirect_to ot_traces_path(filter_params)
   end
 
   def destroy
-    ObSpan.where(trace_id: params[:id]).delete_all
+    OtSpan.where(trace_id: params[:id]).delete_all
     flash[:notice] = l(:notice_successful_delete)
-    redirect_to ob_traces_path
+    redirect_to ot_traces_path
   end
 
   private
 
   def filtered_roots
-    scope = ObSpan.roots
+    scope = OtSpan.roots
     scope = case params[:type]
             when 'other' then scope.where.not(kind: 'server')
             when 'all' then scope
@@ -67,8 +66,8 @@ class ObTracesController < ObBaseController
     scope = scope.where(duration_us: ..max_us) if max_us
     scope = scope.where(error: true).or(scope.where(http_status: 500..)) if params[:errors] == '1'
     if params[:q].present?
-      table = ObSpan.arel_table
-      pattern = "%#{ObSpan.sanitize_sql_like(params[:q].strip)}%"
+      table = OtSpan.arel_table
+      pattern = "%#{OtSpan.sanitize_sql_like(params[:q].strip)}%"
       scope = scope.where(table[:name].matches(pattern).or(table[:target].matches(pattern)))
     end
     scope

@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
-# Shared by the Traces, Logs and Metrics tabs of Administration > Redmine Observability;
-# each subclass lists its filter form's parameters in FILTERS.
-class ObBaseController < ApplicationController
+# Shared by the Traces, Logs and Metrics tabs; each subclass lists its filter form's parameters in FILTERS.
+class OtBaseController < ApplicationController
   layout 'admin'
   self.main_menu = false
 
@@ -10,9 +9,8 @@ class ObBaseController < ApplicationController
 
   helper :sort
   include SortHelper
-  helper :ob_traces
+  helper :ot_traces
 
-  # Period filter lookbacks; 'custom' uses the From and To dates.
   PERIODS = {
     '1h' => 1.hour, '2h' => 2.hours, '6h' => 6.hours, '12h' => 12.hours,
     '24h' => 24.hours, '2d' => 2.days, '7d' => 7.days
@@ -24,12 +22,11 @@ class ObBaseController < ApplicationController
 
   private
 
-  # Query parameters of the filter form, kept when deleting the listed rows.
   def filter_params
     request.query_parameters.slice(*self.class::FILTERS).compact_blank
   end
 
-  # [from, to] of the period filter, either may be nil; custom dates are whole days in the user's zone.
+  # [from, to] of the period filter; either may be nil. Custom dates are whole days in the user's zone.
   def period_range(period = params[:period])
     return [PERIODS[period]&.ago, nil] unless period == 'custom'
 

@@ -1,119 +1,123 @@
 en:
-  label_ob_recording: Recording and tracing
-  label_ob_destinations: Destinations
-  label_ob_destination: Destination
-  label_ob_format: Format
-  label_ob_endpoint: Endpoint
-  label_ob_headers: Headers
-  text_ob_destinations: Every request, SQL query and outgoing HTTP call is sent to each destination's endpoint, and nowhere else; with none listed, nothing is sent. Install and run the tracing backend yourself, then add its endpoint here. Changes apply without a restart.
-  text_ob_headers: "Comma-separated key=value pairs, e.g. api-key=YOUR_KEY"
-  text_ob_select_row: Select a destination first.
-  text_ob_invalid_endpoint: Enter an endpoint URL that starts with http:// or https://.
-  text_ob_not_loaded: "Tracing is off because the plugin was not loaded when Redmine started. Run bundle install and restart Redmine."
-  label_ob_storage: Store data
-  label_ob_store_traces: Store traces
-  text_ob_store_traces: Requests, SQL queries and HTTP calls, shown in
-  label_ob_store_logs: Store logs
-  text_ob_store_logs: Log lines, with the request that wrote them.
-  text_ob_log_level: "Level: %{level}, from config.log_level."
-  text_ob_log_level_debug: Debug includes SQL values such as API tokens.
-  label_ob_store_metrics: Store metrics
-  text_ob_store_metrics: Request and SQL durations, threads, connections and memory, every minute.
-  label_ob_keep_for: Keep for
-  text_ob_traces_off: Traces are not being stored. Turn on "Store traces" in the plugin settings.
-  text_ob_logs_off: Logs are not being stored. Turn on "Store logs" in the plugin settings.
-  text_ob_metrics_off: Metrics are not being stored. Turn on "Store metrics" in the plugin settings.
-  label_ob_observability: Redmine Observability
-  label_ob_traces: Traces
-  label_ob_logs: Logs
-  label_ob_metrics: Metrics
-  label_ob_web_requests: Web requests
-  label_ob_background: Background work
-  label_ob_period: Period
-  label_ob_any_time: Any time
-  label_ob_last_hour: Last hour
-  label_ob_last_hours: "Last %{count} hours"
-  label_ob_last_days: "Last %{count} days"
-  label_ob_custom_range: Custom range
-  label_ob_from: From
-  label_ob_to: To
-  label_ob_min_duration: Min duration
-  label_ob_max_duration: Max duration
-  text_ob_duration_hint: "e.g. 1.2s, 100ms, 500us"
-  label_ob_errors_only: Errors only
-  label_ob_search_hint: Name or path
-  label_ob_x_traces:
+  label_ot_recording: Recording and tracing
+  label_ot_destinations: Destinations
+  label_ot_destination: Destination
+  label_ot_format: Format
+  label_ot_endpoint: Endpoint
+  label_ot_headers: Headers
+  text_ot_destinations: Traces of every request, SQL query and outgoing HTTP call go to each destination, with logs and metrics where chosen, and nowhere else; with none listed, nothing is sent. Install and run the backend yourself, then add its endpoint here. Changes apply without a restart.
+  text_ot_headers: "Comma-separated key=value pairs, e.g. api-key=YOUR_KEY"
+  label_ot_send: Send
+  text_ot_signals: "OTLP only. Logs and metrics go to the endpoint with /v1/logs or /v1/metrics in place of /v1/traces."
+  text_ot_select_row: Select a destination first.
+  text_ot_invalid_endpoint: Enter an endpoint URL that starts with http:// or https://.
+  text_ot_not_loaded: "Tracing is off because the plugin was not loaded when Redmine started. Run bundle install and restart Redmine."
+  label_ot_storage: Store data
+  label_ot_store_traces: Store traces
+  text_ot_store_traces: Requests, SQL queries and HTTP calls, shown in
+  label_ot_store_logs: Store logs
+  text_ot_store_logs: Log lines, with the request that wrote them.
+  text_ot_log_level: "Level: %{level}, from config.log_level."
+  text_ot_log_level_debug: Debug includes SQL values such as API tokens.
+  label_ot_stop_log_files: Stop log file
+  text_ot_stop_log_files: "While logs are stored, nothing is written to %{files}. Lines that cannot be saved, such as while the database is down, are lost."
+  label_ot_store_metrics: Store metrics
+  text_ot_store_metrics: Request and SQL durations, threads, connections and memory, every minute.
+  label_ot_keep_for: Keep for
+  text_ot_traces_off: Traces are not being stored. Turn on "Store traces" in the plugin settings.
+  text_ot_logs_off: Logs are not being stored. Turn on "Store logs" in the plugin settings.
+  text_ot_metrics_off: Metrics are not being stored. Turn on "Store metrics" in the plugin settings.
+  label_ot_opentelemetry: Redmine OpenTelemetry
+  label_ot_traces: Traces
+  label_ot_logs: Logs
+  label_ot_metrics: Metrics
+  label_ot_web_requests: Web requests
+  label_ot_background: Background work
+  label_ot_period: Period
+  label_ot_any_time: Any time
+  label_ot_last_hour: Last hour
+  label_ot_last_hours: "Last %{count} hours"
+  label_ot_last_days: "Last %{count} days"
+  label_ot_custom_range: Custom range
+  label_ot_from: From
+  label_ot_to: To
+  label_ot_min_duration: Min duration
+  label_ot_max_duration: Max duration
+  text_ot_duration_hint: "e.g. 1.2s, 100ms, 500us"
+  label_ot_errors_only: Errors only
+  label_ot_search_hint: Name or path
+  label_ot_x_traces:
     one: 1 trace
     other: "%{count} traces"
-  label_ob_x_spans:
+  label_ot_x_spans:
     one: 1 span
     other: "%{count} spans"
-  label_ob_x_errors:
+  label_ot_x_errors:
     one: 1 error
     other: "%{count} errors"
-  label_ob_most_recent: Most recent
-  label_ob_oldest_first: Oldest first
-  label_ob_longest_first: Longest first
-  label_ob_shortest_first: Shortest first
-  label_ob_ago: "%{value} ago"
-  text_ob_delete_traces:
+  label_ot_most_recent: Most recent
+  label_ot_oldest_first: Oldest first
+  label_ot_longest_first: Longest first
+  label_ot_shortest_first: Shortest first
+  label_ot_ago: "%{value} ago"
+  text_ot_delete_traces:
     one: Delete the trace matching these filters? This cannot be undone.
     other: "Delete the %{count} traces matching these filters, on every page? This cannot be undone."
-  label_ob_delete_all: Delete all
-  label_ob_delete_selected: Delete selected
-  text_ob_delete_selected: Delete the selected traces? This cannot be undone.
-  notice_ob_traces_deleted:
+  label_ot_delete_all: Delete all
+  label_ot_delete_selected: Delete selected
+  text_ot_delete_selected: Delete the selected traces? This cannot be undone.
+  notice_ot_traces_deleted:
     one: 1 trace deleted.
     other: "%{count} traces deleted."
-  label_ob_path: Path
-  label_ob_duration: Duration
-  label_ob_spans: Spans
-  label_ob_span: Span
-  label_ob_trace_id: Trace ID
-  label_ob_offset: Starts at
-  label_ob_request: Request
-  label_ob_sql: SQL
-  label_ob_http_call: Outgoing HTTP
-  label_ob_other: Other
-  label_ob_error: Error
-  label_ob_ok: OK
-  text_ob_chart_hint: Each dot is a trace; bigger dots have more spans.
-  text_ob_click_span: Click a span to see its details.
-  label_ob_level: Level
-  label_ob_all_levels: All levels
-  label_ob_level_at_least: "%{level} and above"
-  label_ob_level_debug: Debug
-  label_ob_level_info: Info
-  label_ob_level_warn: Warning
-  label_ob_level_error: Error
-  label_ob_level_fatal: Fatal
-  label_ob_level_unknown: Unknown
-  label_ob_message: Message
-  label_ob_x_logs:
+  label_ot_path: Path
+  label_ot_duration: Duration
+  label_ot_spans: Spans
+  label_ot_span: Span
+  label_ot_trace_id: Trace ID
+  label_ot_offset: Starts at
+  label_ot_request: Request
+  label_ot_sql: SQL
+  label_ot_http_call: Outgoing HTTP
+  label_ot_other: Other
+  label_ot_error: Error
+  label_ot_ok: OK
+  text_ot_chart_hint: Each dot is a trace; bigger dots have more spans.
+  text_ot_click_span: Click a span to see its details.
+  label_ot_level: Level
+  label_ot_all_levels: All levels
+  label_ot_level_at_least: "%{level} and above"
+  label_ot_level_debug: Debug
+  label_ot_level_info: Info
+  label_ot_level_warn: Warning
+  label_ot_level_error: Error
+  label_ot_level_fatal: Fatal
+  label_ot_level_unknown: Unknown
+  label_ot_message: Message
+  label_ot_x_logs:
     one: 1 log line
     other: "%{count} log lines"
-  text_ob_delete_logs:
+  text_ot_delete_logs:
     one: Delete the log line matching these filters? This cannot be undone.
     other: "Delete the %{count} log lines matching these filters, on every page? This cannot be undone."
-  notice_ob_logs_deleted:
+  notice_ot_logs_deleted:
     one: 1 log line deleted.
     other: "%{count} log lines deleted."
-  text_ob_same_request: Show the log lines of this request
-  label_ob_view_trace: View trace
-  label_ob_span_id: Span ID
-  label_ob_metric: Metric
-  label_ob_series: Series
-  label_ob_x_series:
+  text_ot_same_request: Show the log lines of this request
+  label_ot_view_trace: View trace
+  label_ot_span_id: Span ID
+  label_ot_metric: Metric
+  label_ot_series: Series
+  label_ot_x_series:
     one: 1 series
     other: "%{count} series"
-  label_ob_no_attributes: All
-  label_ob_count: Count
-  label_ob_average: Average
-  label_ob_max: Max
-  label_ob_total: Total
-  text_ob_bucket: "Each point covers %{value}."
-  text_ob_click_series: Chart this series alone
-  text_ob_delete_metric: Delete this metric's data matching these filters? This cannot be undone.
-  notice_ob_metrics_deleted:
+  label_ot_no_attributes: All
+  label_ot_count: Count
+  label_ot_average: Average
+  label_ot_max: Max
+  label_ot_total: Total
+  text_ot_bucket: "Each point covers %{value}."
+  text_ot_click_series: Chart this series alone
+  text_ot_delete_metric: Delete this metric's data matching these filters? This cannot be undone.
+  notice_ot_metrics_deleted:
     one: 1 data point deleted.
     other: "%{count} data points deleted."

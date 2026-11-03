@@ -1,0 +1,18 @@
+<%# +tab+ is traces, logs or metrics. %>
+<div class="contextual">
+  <%= link_to sprite_icon('settings', l(:label_settings)), plugin_settings_path('redmine_opentelemetry'), class: 'icon icon-settings' %>
+</div>
+
+<%= title l(:label_ot_opentelemetry) %>
+
+<% if !RedmineOpentelemetry.pipelines %>
+  <div class="flash warning"><%= l(:text_ot_not_loaded) %></div>
+<% elsif !RedmineOpentelemetry.public_send(:"store_#{tab}?") %>
+  <div class="flash warning"><%= l(:"text_ot_#{tab}_off") %></div>
+<% end %>
+
+<%= render_tabs [{ name: 'traces', label: :label_ot_traces, url: ot_traces_path },
+                 { name: 'logs', label: :label_ot_logs, url: ot_logs_path },
+                 { name: 'metrics', label: :label_ot_metrics, url: ot_metrics_path }], tab %>
+
+<%= render 'opentelemetry/styles' %>

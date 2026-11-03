@@ -1,6 +1,6 @@
-class CreateObSpans < ActiveRecord::Migration[8.1]
+class CreateOtSpans < ActiveRecord::Migration[8.1]
   def change
-    create_table :ob_spans do |t|
+    create_table :ot_spans do |t|
       t.string   :trace_id, limit: 32, null: false, index: true
       t.string   :span_id, limit: 16, null: false
       t.string   :parent_span_id, limit: 16
@@ -12,10 +12,9 @@ class CreateObSpans < ActiveRecord::Migration[8.1]
       t.boolean  :error, null: false, default: false
       t.datetime :started_at, precision: 6, null: false, index: true
       t.bigint   :duration_us, null: false
-      # JSON: attributes, events and the status message. MySQL's plain text stops at 64 KB.
       t.text     :details, limit: (16.megabytes if Redmine::Database.mysql?)
       t.timestamps null: false
     end
-    add_index :ob_spans, [:root, :started_at]
+    add_index :ot_spans, [:root, :started_at]
   end
 end

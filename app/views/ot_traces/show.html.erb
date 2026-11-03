@@ -1,0 +1,150 @@
+<div class="contextual">
+  <%= delete_link ot_trace_path(params[:id]) %>
+</div>
+
+<%= title [l(:label_ot_opentelemetry), ot_traces_path], @root.name %>
+
+<div class="ot-page ot-trace-page">
+<div class="ot-card ot-summary">
+  <dl class="ot-stats">
+    <div><dt><%= l(:label_date) %></dt><dd><%= ot_time(@started_at) %></dd></div>
+    <div><dt><%= l(:label_ot_duration) %></dt><dd><%= ot_duration(@duration_us) %></dd></div>
+    <% if @root.http_status %>
+      <div><dt><%= l(:field_status) %></dt><dd><span class="ot-tag ot-status-<%= @root.http_status / 100 %>xx"><%= @root.http_status %></span></dd></div>
+    <% end %>
+    <div><dt><%= l(:label_ot_spans) %></dt><dd><%= @rows.size %></dd></div>
+    <% if @log_count > 0 %>
+      <div><dt><%= l(:label_ot_logs) %></dt><dd><%= link_to l(:label_ot_x_logs, count: @log_count), ot_logs_path(trace_id: params[:id], sort: 'logged_at') %></dd></div>
+    <% end %>
+    <div><dt><%= l(:label_ot_trace_id) %></dt><dd><code><%= params[:id] %></code></dd></div>
+    <% if @root.target %><div><dt><%= l(:label_ot_path) %></dt><dd><code><%= @root.target %></code></dd></div><% end %>
+  </dl>
+  <% if @root.status_message %><p class="ot-error-message"><%= @root.status_message %></p><% end %>
+</div>
+
+<div class="ot-legend">
+  <% { 'request' => :label_ot_request, 'sql' => :label_ot_sql,
+       'http' => :label_ot_http_call, 'internal' => :label_ot_other }.each do |category, label| %>
+    <span class="<%= category %>"><i class="ot-swatch"></i><%= l(label) %></span>
+  <% end %>
+  <span class="ot-failed"><i class="ot-swatch"></i><%= l(:label_ot_error) %></span>
+  <em class="ot-legend-hint"><%= l(:text_ot_click_span) %></em>
+</div>
+
+<div class="ot-card ot-waterfall-scroll">
+<div class="ot-waterfall">
+  <div class="ot-row ot-head">
+    <div class="ot-name"><%= l(:label_ot_span) %></div>
+    <div class="ot-timeline">
+      <div class="ot-track">
+        <% ot_ticks(@duration_us).each do |percent, label| %>
+          <span class="ot-tick" style="left: <%= percent %>%;"><%= label %></span>
+        <% end %>
+      </div>
+    </div>
+    <div class="ot-number"><%= l(:label_ot_duration) %></div>
+  </div>
+  <% @rows.each do |span, depth| %>
+    <% hint = ot_span_hint(span) %>
+    <div class="ot-row ot-span <%= span.category %> <%= 'ot-failed' if span.failed? %>"
+         tabindex="0" role="button" aria-expanded="false">
+      <div class="ot-name" style="padding-left: <%= 12 + depth * 14 %>px;" title="<%= [span.name, hint].compact.join(' - ') %>">
+        <span class="ot-caret"></span><span class="ot-span-name"><%= span.name %></span>
+        <% if hint %><span class="ot-hint"><%= hint %></span><% end %>
+      </div>
+      <div class="ot-timeline">
+        <div class="ot-track"><div class="ot-bar" style="<%= ot_bar_style(span, @started_at, @duration_us) %>"></div></div>
+      </div>
+      <div class="ot-number"><%= ot_duration(span.duration_us) %></div>
+    </div>
+    <div class="ot-details" hidden>
+      <dl class="ot-attributes">
+        <dt><%= l(:field_type) %></dt><dd><%= span.kind %></dd>
+        <dt><%= l(:label_ot_offset) %></dt><dd>+<%= ot_duration(((span.started_at - @started_at) * 1_000_000).round) %></dd>
+        <% if span.status_message %><dt><%= l(:field_status) %></dt><dd><%= ot_value(span.status_message) %></dd><% end %>
+        <% span.span_attributes.sort.each do |key, value| %>
+          <dt><%= key %></dt><dd><%= ot_value(value) %></dd>
+        <% end %>
+      </dl>
+      <% span.events.each do |event| %>
+        <h4 class="ot-event"><%= event['name'] %> <span>+<%= ot_duration(event['offset_us']) %></span></h4>
+        <dl class="ot-attributes">
+          <% Hash(event['attributes']).sort.each do |key, value| %>
+            <dt><%= key %></dt><dd><%= ot_value(value) %></dd>
+          <% end %>
+        </dl>
+      <% end %>
+    </div>
+  <% end %>
+</div>
+</div>
+</div>
+
+<%= render 'opentelemetry/styles' %>
+
+<style type="text/css">
+  .ot-trace-page {
+    --ot-request: #0c66e4; --ot-sql: #1d9aaa; --ot-http: #c98500; --ot-other: #8590a2;
+    line-height: 1.45;
+  }
+  .ot-trace-page code { padding: 0; font-size: 0.95em; color: var(--ot-text); background: none; }
+  .ot-card { margin-bottom: 16px; background: var(--ot-surface); border-radius: 8px; box-shadow: var(--ot-shadow); }
+
+  .ot-summary { padding: 14px 18px; }
+  .ot-stats { display: flex; flex-wrap: wrap; gap: 12px 36px; margin: 0; }
+  .ot-stats dt { margin: 0 0 2px; font-size: 0.8em; font-weight: 600; color: var(--ot-text-muted); }
+  .ot-stats dd { margin: 0; font-size: 1.05em; color: var(--ot-text); word-break: break-all; }
+  .ot-error-message { margin: 12px 0 0; padding: 8px 12px; color: var(--ot-error); background: var(--ot-error-soft); border-radius: 6px; }
+
+  .ot-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 0 2px 10px; font-size: 0.9em; color: var(--ot-text-subtle); }
+  .ot-legend > span { white-space: nowrap; }
+  .ot-legend-hint { margin-left: auto; font-style: normal; color: var(--ot-text-muted); }
+  .ot-swatch { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; background: var(--ot-other); }
+
+  .ot-waterfall-scroll { overflow-x: auto; }
+  .ot-waterfall { min-width: 640px; font-size: 13px; }
+  .ot-row { display: grid; grid-template-columns: minmax(0, 36%) minmax(0, 1fr) 7em; align-items: center; min-height: 30px; border-bottom: 1px solid var(--ot-grid); }
+  .ot-head { min-height: 36px; font-size: 12px; font-weight: 600; color: var(--ot-text-muted); background: var(--ot-surface-subtle); border-bottom-color: var(--ot-line); border-radius: 8px 8px 0 0; }
+  .ot-head .ot-name { padding-left: 12px; }
+  .ot-name { min-width: 0; padding-right: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ot-number { padding-right: 14px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ot-text-subtle); }
+  .ot-timeline { position: relative; align-self: stretch; border-left: 1px solid var(--ot-grid); }
+  .ot-track { position: absolute; top: 0; bottom: 0; left: 12px; right: 12px;
+              background-image: linear-gradient(to right, var(--ot-grid) 1px, transparent 1px); background-size: 25% 100%; }
+  .ot-head .ot-track { background: none; }
+  .ot-tick { position: absolute; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-weight: normal; font-variant-numeric: tabular-nums; }
+  .ot-tick:first-child { transform: translate(0, -50%); }
+  .ot-tick:last-child { transform: translate(-100%, -50%); }
+
+  .ot-span { cursor: pointer; }
+  .ot-span:hover, .ot-span:focus-visible { background: var(--ot-surface-subtle); outline: none; }
+  .ot-span.is-open { background: var(--ot-accent-soft); border-bottom-color: transparent; }
+  .ot-caret { display: inline-block; width: 0; height: 0; margin-right: 8px; vertical-align: 1px; border-style: solid; border-width: 4px 0 4px 5px; border-color: transparent transparent transparent var(--ot-text-muted); transition: transform 0.15s; }
+  .ot-span.is-open .ot-caret { transform: rotate(90deg); }
+  .ot-span-name { color: var(--ot-text); }
+  .ot-hint { margin-left: 8px; font-family: monospace; font-size: 12px; color: var(--ot-text-muted); }
+  .ot-bar { position: absolute; top: 50%; height: 10px; margin-top: -5px; border-radius: 3px; background: var(--ot-other); }
+  .request .ot-bar, .request .ot-swatch { background: var(--ot-request); }
+  .sql .ot-bar, .sql .ot-swatch { background: var(--ot-sql); }
+  .http .ot-bar, .http .ot-swatch { background: var(--ot-http); }
+  .ot-failed .ot-bar, .ot-failed .ot-swatch { background: var(--ot-error); }
+  .ot-failed .ot-span-name { color: var(--ot-error); }
+
+  .ot-details { padding: 6px 16px 12px 34px; background: var(--ot-surface-subtle); border-bottom: 1px solid var(--ot-line); }
+  .ot-attributes pre { margin: 0; padding: 6px 8px; font-size: 12px; line-height: 1.5; white-space: pre-wrap; background: var(--ot-surface); border: 1px solid var(--ot-line); border-radius: 4px; }
+  .ot-event { margin: 12px 0 2px; font-size: 13px; color: var(--ot-text); }
+  .ot-event span { margin-left: 4px; font-weight: normal; color: var(--ot-text-muted); }
+</style>
+
+<%= javascript_tag do %>
+  $(function () {
+    $('.ot-waterfall').on('click keydown', '.ot-span', function (event) {
+      if (event.type === 'keydown') {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+      }
+      var open = $(this).toggleClass('is-open').hasClass('is-open');
+      $(this).attr('aria-expanded', open).next('.ot-details').prop('hidden', !open);
+    });
+  });
+<% end %>

@@ -1,25 +1,21 @@
 # frozen_string_literal: true
 
-module RedmineObservability
-  # One of Rails.logger's broadcasts: each line it logs becomes an OpenTelemetry log record,
-  # with the trace and span of the request that logged it. RedmineObservability.apply_settings
-  # sets the level; at OFF nothing is recorded and Rails.logger's own level is unchanged.
+module RedmineOpentelemetry
+  # A Rails.logger broadcast that turns each log line into an OpenTelemetry log record of the
+  # current trace; at OFF it records nothing.
   class LogBridge < ActiveSupport::Logger
     OFF = ::Logger::UNKNOWN + 1
-    # Logger severities DEBUG to FATAL, by number.
     LEVEL_NAMES = %w[debug info warn error fatal].freeze
-    # Terminal colour codes, which Rails adds to SQL lines in development.
     COLOUR_CODES = /\e\[[\d;]*m/
 
     def initialize
       super(nil, level: OFF)
-      @otel_logger = OpenTelemetry.logger_provider.logger(name: 'redmine_observability')
+      @otel_logger = OpenTelemetry.logger_provider.logger(name: 'redmine_opentelemetry')
     end
 
     # Never raises or logs, since it runs inside every Rails.logger call.
     def add(severity, message = nil, progname = nil)
       severity ||= ::Logger::UNKNOWN
-      # Exporters save untraced; their own SQL lines are not recorded again.
       return true if severity < level || OpenTelemetry::Common::Utilities.untraced?
 
       message = block_given? ? yield : progname if message.nil?
@@ -27,7 +23,7 @@ module RedmineObservability
       return true if body.empty?
 
       name = LEVEL_NAMES[severity]
-      @otel_logger.on_emit(timestamp: Time.now, severity_number: RedmineObservability::LOG_LEVELS[name],
+      @otel_logger.on_emit(timestamp: Time.now, severity_number: RedmineOpentelemetry::LOG_LEVELS[name],
                            severity_text: name&.upcase || 'UNKNOWN', body: body, attributes: exception_attributes(message))
       true
     rescue StandardError
@@ -49,6 +45,27 @@ module RedmineObservability
       return unless message.is_a?(::Exception)
 
       { 'exception.type' => message.class.name, 'exception.message' => message.message.to_s }
+    end
+  end
+
+  # Extended onto Rails.logger's file broadcasts, such as log/production.log. While log_files_off
+  # is set they write nothing but keep their level, so the bridge still gets each line.
+  module LogFileMute
+    def add(severity, message = nil, progname = nil)
+      RedmineOpentelemetry.log_files_off ? true : super
+    end
+
+    def <<(message)
+      super unless RedmineOpentelemetry.log_files_off
+    end
+
+    # Returns the paths of the broadcasts it extends.
+    def self.install(logger)
+      logger.broadcasts.filter_map do |broadcast|
+        path = broadcast.instance_variable_get(:@logdev).try(:filename)
+        broadcast.extend(self) if path
+        path
+      end
     end
   end
 end

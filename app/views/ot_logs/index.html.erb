@@ -1,0 +1,119 @@
+<%= render 'opentelemetry/header', tab: 'logs' %>
+
+<%= form_tag(ot_logs_path, method: :get, id: 'ot-search') do %>
+<fieldset class="ot-filters"><legend><%= l(:label_filter_plural) %></legend>
+  <span class="ot-filter">
+    <label for="level"><%= l(:label_ot_level) %>:</label>
+    <%= select_tag 'level', ot_level_options(params[:level]) %>
+  </span>
+  <span class="ot-filter">
+    <label for="q"><%= l(:label_search) %>:</label>
+    <%= text_field_tag 'q', params[:q], size: 25, placeholder: l(:label_ot_message) %>
+  </span>
+  <%= render 'opentelemetry/period_filter', period: params[:period] %>
+  <% if params[:trace_id].present? %>
+    <span class="ot-filter">
+      <%= hidden_field_tag 'trace_id', params[:trace_id] %>
+      <span class="ot-tag ot-filter-chip" title="<%= params[:trace_id] %>">
+        <%= l(:label_ot_trace_id) %> <%= params[:trace_id].to_s.first(7) %>
+        <%= link_to '×', ot_logs_path(filter_params.except('trace_id')), title: l(:button_clear), 'aria-label': l(:button_clear) %>
+      </span>
+    </span>
+  <% end %>
+  <span class="ot-filter">
+    <%= submit_tag l(:button_apply), class: 'small', name: nil %>
+    <%= link_to sprite_icon('reload', l(:button_clear)), ot_logs_path, class: 'icon icon-reload' %>
+  </span>
+</fieldset>
+<% end %>
+
+<div class="ot-page">
+<% if @logs.empty? %>
+  <p class="nodata"><%= l(:label_no_data) %></p>
+<% else %>
+  <div class="ot-results-header">
+    <strong><%= l(:label_ot_x_logs, count: @log_count) %></strong>
+    <%= delete_link ot_logs_path(filter_params), { class: 'icon icon-del ot-delete',
+                    data: { confirm: l(:text_ot_delete_logs, count: @log_count) } }, l(:label_ot_delete_all) %>
+    <label>
+      <%= l(:label_sort) %>:
+      <%= select_tag 'sort', ot_log_sort_options(@sort_criteria.to_param), form: 'ot-search', onchange: 'this.form.submit();' %>
+    </label>
+  </div>
+
+  <div class="ot-logs">
+    <% @logs.each do |log| %>
+      <div class="ot-log ot-level-<%= log.level %>" tabindex="0" role="button" aria-expanded="false">
+        <span class="ot-log-time" title="<%= ot_time(log.logged_at) %>"><%= ot_log_time(log.logged_at) %></span>
+        <span class="ot-level"><%= log.severity_text.presence || log.level.upcase %></span>
+        <span class="ot-log-message"><%= log.summary %><% if log.multiline? %> <span class="ot-more">…</span><% end %></span>
+        <% if log.trace_id %>
+          <%= link_to log.trace_id.first(7), ot_logs_path(trace_id: log.trace_id, sort: 'logged_at'),
+                      class: 'ot-log-trace', title: l(:text_ot_same_request) %>
+        <% else %>
+          <span></span>
+        <% end %>
+      </div>
+      <div class="ot-log-details" hidden>
+        <pre><%= log.body %></pre>
+        <dl class="ot-attributes">
+          <dt><%= l(:label_date) %></dt><dd><%= ot_time(log.logged_at) %> <span class="ot-ago"><%= l(:label_ot_ago, value: distance_of_time_in_words(Time.now, log.logged_at)) %></span></dd>
+          <% if log.trace_id %>
+            <dt><%= l(:label_ot_trace_id) %></dt>
+            <dd>
+              <code><%= log.trace_id %></code>
+              <% if @stored_traces.include?(log.trace_id) %>
+                <span class="ot-divider">|</span><%= link_to l(:label_ot_view_trace), ot_trace_path(log.trace_id) %>
+              <% end %>
+            </dd>
+          <% end %>
+          <% if log.span_id %><dt><%= l(:label_ot_span_id) %></dt><dd><code><%= log.span_id %></code></dd><% end %>
+          <% log.log_attributes.sort.each do |key, value| %>
+            <dt><%= key %></dt><dd><%= ot_value(value) %></dd>
+          <% end %>
+        </dl>
+      </div>
+    <% end %>
+  </div>
+
+  <span class="pagination"><%= pagination_links_full @log_pages, @log_count %></span>
+<% end %>
+</div>
+
+<style type="text/css">
+  .ot-logs { margin-bottom: 12px; background: var(--ot-surface); border-radius: 8px; box-shadow: var(--ot-shadow); overflow: hidden; }
+  .ot-log { display: grid; grid-template-columns: auto 5.5em minmax(0, 1fr) auto; gap: 12px; align-items: baseline;
+            padding: 5px 12px; border-bottom: 1px solid var(--ot-grid); cursor: pointer; font-size: 13px; }
+  .ot-log:hover, .ot-log:focus-visible { background: var(--ot-surface-subtle); outline: none; }
+  .ot-log.is-open { background: var(--ot-accent-soft); border-bottom-color: transparent; }
+  .ot-log-time { white-space: nowrap; font-family: monospace; font-size: 12px; color: var(--ot-text-muted); }
+  .ot-level { padding: 0 4px; border-radius: 4px; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; color: var(--ot-text-subtle); background: var(--ot-grid); }
+  .ot-level-info .ot-level { color: var(--ot-accent); background: var(--ot-accent-soft); }
+  .ot-level-warn .ot-level { color: var(--ot-warning-text); background: var(--ot-warning-soft); }
+  .ot-level-error .ot-level, .ot-level-fatal .ot-level { color: var(--ot-error); background: var(--ot-error-soft); }
+  .ot-log-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 12px; color: var(--ot-text); }
+  .ot-level-error .ot-log-message, .ot-level-fatal .ot-log-message { color: var(--ot-error); }
+  .ot-level-debug .ot-log-message { color: var(--ot-text-subtle); }
+  .ot-more { color: var(--ot-text-muted); }
+  a.ot-log-trace { font-family: monospace; font-size: 12px; color: var(--ot-text-muted); }
+  a.ot-log-trace:hover { color: var(--ot-accent); }
+  .ot-log-details { padding: 8px 16px 12px; background: var(--ot-surface-subtle); border-bottom: 1px solid var(--ot-line); font-size: 13px; }
+  .ot-log-details pre { max-height: 400px; margin: 0 0 8px; padding: 8px 10px; overflow: auto; font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+                        background: var(--ot-surface); border: 1px solid var(--ot-line); border-radius: 4px; }
+  .ot-log-details code { padding: 0; background: none; }
+  .ot-log-details .ot-attributes pre { max-height: none; margin: 0; }
+</style>
+
+<%= javascript_tag do %>
+  $(function () {
+    $('.ot-logs').on('click keydown', '.ot-log', function (event) {
+      if ($(event.target).closest('a').length) return;
+      if (event.type === 'keydown') {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+      }
+      var open = $(this).toggleClass('is-open').hasClass('is-open');
+      $(this).attr('aria-expanded', open).next('.ot-log-details').prop('hidden', !open);
+    });
+  });
+<% end %>

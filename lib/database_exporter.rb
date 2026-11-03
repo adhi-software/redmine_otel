@@ -3,18 +3,18 @@
 require 'json'
 require_relative 'database_writer'
 
-module RedmineObservability
-  # Saves spans to ob_spans for the Traces tab of Administration > Redmine Observability.
+module RedmineOpentelemetry
+  # Saves spans to ot_spans for the Traces tab.
   class DatabaseExporter
     include DatabaseWriter
 
     def export(span_data, timeout: nil)
       return OpenTelemetry::SDK::Trace::Export::SUCCESS if span_data.empty?
 
-      write(ObSpan, span_data.map { row(_1) }, :started_at, :traces)
+      write(OtSpan, span_data.map { row(_1) }, :started_at, :traces)
       OpenTelemetry::SDK::Trace::Export::SUCCESS
     rescue StandardError => e
-      OpenTelemetry.handle_error(exception: e, message: 'redmine_observability: could not save spans')
+      OpenTelemetry.handle_error(exception: e, message: 'redmine_opentelemetry: could not save spans')
       OpenTelemetry::SDK::Trace::Export::FAILURE
     end
 
@@ -33,7 +33,6 @@ module RedmineObservability
         trace_id: span.hex_trace_id,
         span_id: span.hex_span_id,
         parent_span_id: (span.hex_parent_span_id if has_parent),
-        # A remote parent, such as the mobile app's span, is not stored here.
         root: !has_parent || span.parent_span_is_remote == true,
         kind: span.kind.to_s,
         name: span.name.to_s.truncate(255),

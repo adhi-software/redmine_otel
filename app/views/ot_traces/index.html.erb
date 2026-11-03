@@ -1,0 +1,220 @@
+<%= render 'opentelemetry/header', tab: 'traces' %>
+
+<%= form_tag(ot_traces_path, method: :get, id: 'ot-search') do %>
+<fieldset class="ot-filters"><legend><%= l(:label_filter_plural) %></legend>
+  <span class="ot-filter">
+    <label for="type"><%= l(:field_type) %>:</label>
+    <%= select_tag 'type', options_for_select([[l(:label_ot_web_requests), ''],
+                                                [l(:label_ot_background), 'other'],
+                                                [l(:label_all), 'all']], params[:type]) %>
+  </span>
+  <span class="ot-filter">
+    <label for="q"><%= l(:label_search) %>:</label>
+    <%= text_field_tag 'q', params[:q], size: 25, placeholder: l(:label_ot_search_hint) %>
+  </span>
+  <%= render 'opentelemetry/period_filter', period: params[:period] %>
+  <span class="ot-filter" title="<%= l(:text_ot_duration_hint) %>">
+    <label for="min_duration"><%= l(:label_ot_min_duration) %>:</label>
+    <%= text_field_tag 'min_duration', params[:min_duration], size: 6, placeholder: '100ms' %>
+  </span>
+  <span class="ot-filter" title="<%= l(:text_ot_duration_hint) %>">
+    <label for="max_duration"><%= l(:label_ot_max_duration) %>:</label>
+    <%= text_field_tag 'max_duration', params[:max_duration], size: 6, placeholder: '1.2s' %>
+  </span>
+  <span class="ot-filter">
+    <label><%= check_box_tag 'errors', '1', params[:errors] == '1' %> <%= l(:label_ot_errors_only) %></label>
+  </span>
+  <span class="ot-filter">
+    <%= submit_tag l(:button_apply), class: 'small', name: nil %>
+    <%= link_to sprite_icon('reload', l(:button_clear)), ot_traces_path, class: 'icon icon-reload' %>
+  </span>
+</fieldset>
+<% end %>
+
+<div class="ot-page">
+<% if @traces.empty? %>
+  <p class="nodata"><%= l(:label_no_data) %></p>
+<% else %>
+  <% longest = [@traces.map(&:duration_us).max, 1].max.to_f %>
+  <div class="ot-chart">
+    <div class="ot-chart-head">
+      <div>
+        <strong><%= l(:label_ot_duration) %></strong>
+        <span class="ot-chart-note"><%= l(:text_ot_chart_hint) %></span>
+      </div>
+      <% if @traces.any?(&:failed?) && !@traces.all?(&:failed?) %>
+        <div class="ot-legend">
+          <span><i class="ot-legend-ok"></i><%= l(:label_ot_ok) %></span>
+          <span><i class="ot-legend-error"></i><%= l(:label_ot_error) %></span>
+        </div>
+      <% end %>
+    </div>
+    <div class="ot-chart-plot">
+      <%= content_tag :canvas, '', id: 'ot-chart', role: 'img', 'aria-label': l(:label_ot_duration),
+                      data: { points: ot_chart_points(@traces, @span_counts).to_json, zone: ot_zone_name } %>
+    </div>
+  </div>
+
+  <div class="ot-results-header">
+    <label class="ot-select-all" title="<%= l(:button_check_all) %> / <%= l(:button_uncheck_all) %>">
+      <input type="checkbox" id="ot-select-all" aria-label="<%= l(:button_check_all) %>">
+    </label>
+    <strong><%= l(:label_ot_x_traces, count: @trace_count) %></strong>
+    <%= delete_link ot_traces_path(filter_params), { id: 'ot-delete', class: 'icon icon-del ot-delete',
+                    data: { confirm: l(:text_ot_delete_traces, count: @trace_count),
+                            selected_label: l(:label_ot_delete_selected),
+                            selected_confirm: l(:text_ot_delete_selected) } }, l(:label_ot_delete_all) %>
+    <label>
+      <%= l(:label_sort) %>:
+      <%= select_tag 'sort', ot_sort_options(@sort_criteria.to_param), form: 'ot-search', onchange: 'this.form.submit();' %>
+    </label>
+  </div>
+  <%= form_tag(ot_traces_path(filter_params), method: :delete, id: 'ot-delete-selected') do %>
+    <%= hidden_field_tag 'ids[]', '', id: nil %>
+  <% end %>
+
+  <% @traces.each do |trace| %>
+    <% errors = @error_counts[trace.trace_id].to_i %>
+    <% started_at = ot_local(trace.started_at) %>
+    <div class="ot-trace<%= ' ot-failed' if trace.failed? %>">
+      <label class="ot-trace-check">
+        <%= check_box_tag 'ids[]', trace.trace_id, false, id: nil, form: 'ot-delete-selected', 'aria-label': trace.name %>
+      </label>
+      <div class="ot-trace-main">
+        <%= link_to ot_trace_path(trace.trace_id), class: 'ot-trace-title' do %>
+          <span class="ot-trace-bar" style="width: <%= (trace.duration_us / longest * 100).round(2) %>%;"></span>
+          <span class="ot-trace-name"><%= trace.name %> <span class="ot-trace-id"><%= trace.trace_id.first(7) %></span></span>
+          <span class="ot-trace-duration"><%= ot_duration(trace.duration_us) %></span>
+        <% end %>
+        <div class="ot-trace-body">
+          <span class="ot-tag"><%= l(:label_ot_x_spans, count: @span_counts[trace.trace_id].to_i) %></span>
+          <% if errors > 0 %>
+            <span class="ot-tag ot-tag-error"><%= l(:label_ot_x_errors, count: errors) %></span>
+          <% end %>
+          <% if trace.http_status %>
+            <span class="ot-tag ot-status-<%= trace.http_status / 100 %>xx"><%= trace.http_status %></span>
+          <% end %>
+          <span class="ot-trace-target" title="<%= trace.target %>"><%= trace.target %></span>
+          <span class="ot-trace-when">
+            <%= started_at.to_date == User.current.today ? l(:label_today).capitalize : format_date(started_at) %>
+            <span class="ot-divider">|</span><%= started_at.strftime('%H:%M:%S') %>
+            <span class="ot-ago"><%= l(:label_ot_ago, value: distance_of_time_in_words(Time.now, trace.started_at)) %></span>
+          </span>
+        </div>
+      </div>
+    </div>
+  <% end %>
+
+  <span class="pagination"><%= pagination_links_full @trace_pages, @trace_count %></span>
+<% end %>
+</div>
+
+<style type="text/css">
+  .ot-legend { font-size: 0.85em; color: var(--ot-text-muted); }
+  .ot-legend span { margin-left: 12px; white-space: nowrap; color: var(--ot-text-subtle); }
+  .ot-legend i { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; vertical-align: 1px; }
+  .ot-legend-ok { background: var(--ot-accent); }
+  .ot-legend-error { background: var(--ot-error); }
+
+  .ot-select-all { display: flex; padding-left: 12px; margin-right: -4px; }
+  .ot-trace { display: flex; margin-bottom: 6px; border-radius: 8px; overflow: hidden; background: var(--ot-surface); box-shadow: var(--ot-shadow); transition: box-shadow 0.15s; }
+  .ot-trace:hover { box-shadow: 0 4px 8px -2px rgba(9, 30, 66, 0.2), 0 0 1px rgba(9, 30, 66, 0.25); }
+  .ot-trace:has(.ot-trace-check input:checked) { box-shadow: 0 0 0 2px var(--ot-accent); }
+  .ot-trace-check { display: flex; align-items: center; padding: 0 0 0 12px; cursor: pointer; }
+  .ot-trace-main { flex: 1; min-width: 0; }
+  a.ot-trace-title { position: relative; display: flex; justify-content: space-between; gap: 12px; padding: 5px 12px; background: var(--ot-surface-subtle); border-bottom: 1px solid var(--ot-grid); color: var(--ot-text); font-size: 1.05em; }
+  a.ot-trace-title:hover { text-decoration: none; }
+  a.ot-trace-title:hover .ot-trace-name { color: var(--ot-accent); }
+  .ot-trace-bar { position: absolute; top: 0; bottom: 0; left: 0; background: var(--ot-accent-soft); }
+  .ot-failed .ot-trace-bar { background: var(--ot-error-soft); }
+  .ot-trace-name, .ot-trace-duration { position: relative; }
+  .ot-trace-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ot-trace-id { margin-left: 4px; font-weight: normal; font-family: monospace; font-size: 0.9em; color: var(--ot-text-muted); }
+  .ot-trace-duration { white-space: nowrap; font-weight: 600; }
+  .ot-failed .ot-trace-duration { color: var(--ot-error); }
+  .ot-trace-body { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 5px 12px; }
+  .ot-trace-target { flex: 1 1 120px; min-width: 0; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ot-text-subtle); font-family: monospace; font-size: 0.95em; }
+  .ot-trace-when { margin-left: auto; white-space: nowrap; color: var(--ot-text-subtle); font-size: 0.95em; }
+</style>
+
+<%= javascript_tag do %>
+  $(function () {
+    var boxes = $('.ot-trace-check input');
+    var deleteLink = $('#ot-delete');
+    var deleteLabel = deleteLink.find('.icon-label');
+    var allLabel = deleteLabel.text();
+    var refresh = function () {
+      var checked = boxes.filter(':checked').length;
+      $('#ot-select-all').prop({ checked: checked > 0 && checked === boxes.length,
+                                 indeterminate: checked > 0 && checked < boxes.length });
+      deleteLabel.text(checked > 0 ? deleteLink.data('selected-label') + ' (' + checked + ')' : allLabel);
+    };
+    boxes.on('change', refresh);
+    $('#ot-select-all').on('change', function () {
+      boxes.prop('checked', this.checked);
+      refresh();
+    });
+    // Stops rails-ujs, which listens on document, from sending its delete-all request.
+    deleteLink.on('click', function (event) {
+      if (!boxes.is(':checked')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (confirm(this.dataset.selectedConfirm)) $('#ot-delete-selected').submit();
+    });
+    refresh();
+  });
+<% end %>
+
+<%= javascript_tag type: 'module' do %>
+  const canvas = document.getElementById('ot-chart');
+  if (canvas) import('chart.js').then(({ default: Chart }) => {
+    const points = JSON.parse(canvas.dataset.points);
+    const style = getComputedStyle(canvas);
+    const color = (name) => style.getPropertyValue(name).trim();
+    const xs = points.map((p) => p.x);
+    const first = Math.min(...xs), last = Math.max(...xs);
+    const pad = Math.max((last - first) * 0.05, 5000);
+    const time = new Intl.DateTimeFormat(document.documentElement.lang || undefined, Object.assign(
+      { timeZone: canvas.dataset.zone || undefined, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' },
+      last - first < 86400000 ? {} : { month: 'short', day: 'numeric' }));
+    const duration = (ms) => ms === 0 ? '0' : ms >= 1000 ? `${+(ms / 1000).toFixed(2)} s` : `${+ms.toFixed(ms < 10 ? 2 : 1)} ms`;
+    const dataset = (failed) => ({
+      data: points.filter((p) => p.failed === failed).sort((a, b) => b.r - a.r),
+      backgroundColor: color(failed ? '--ot-error' : '--ot-accent'),
+      hoverBackgroundColor: color(failed ? '--ot-error-hover' : '--ot-accent-hover'),
+      borderColor: color('--ot-surface'), hoverBorderColor: color('--ot-surface'),
+      borderWidth: 2, hoverBorderWidth: 2, hoverRadius: 2, hitRadius: 8
+    });
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    Chart.defaults.color = color('--ot-text-muted');
+
+    new Chart(canvas, {
+      type: 'bubble',
+      data: { datasets: [dataset(false), dataset(true)] },
+      options: {
+        maintainAspectRatio: false,
+        animation: { duration: 250 },
+        layout: { padding: { top: 4, right: 4 } },
+        scales: {
+          x: { min: first - pad, max: last + pad, grid: { display: false }, border: { color: color('--ot-line') },
+               ticks: { maxTicksLimit: 6, includeBounds: false, padding: 6, callback: (value) => time.format(value) } },
+          y: { beginAtZero: true, grace: '12%', border: { display: false },
+               grid: { color: color('--ot-grid'), drawTicks: false },
+               ticks: { maxTicksLimit: 4, padding: 8, callback: duration } }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: color('--ot-text'), titleColor: '#fff', bodyColor: color('--ot-line'),
+            titleFont: { size: 13, weight: '600' }, padding: 10, cornerRadius: 6, caretSize: 5, displayColors: false,
+            callbacks: { title: (items) => items[0].raw.duration, label: (item) => item.raw.details }
+          }
+        },
+        onHover: (event, items) => { event.native.target.style.cursor = items.length ? 'pointer' : 'default'; },
+        onClick: (event, items, chart) => {
+          if (items.length) location.href = chart.data.datasets[items[0].datasetIndex].data[items[0].index].url;
+        }
+      }
+    });
+  });
+<% end %>

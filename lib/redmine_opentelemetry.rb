@@ -8,10 +8,8 @@ require_relative 'export_pipeline'
 require_relative 'instruments'
 require_relative 'log_bridge'
 
-# Applies the plugin settings; +pipeline+, +sampler+, +log_bridge+ and +metric_exporter+
-# stay nil without the initializer.
-module RedmineObservability
-  # Days stored traces, logs and metrics are kept when the setting is blank.
+# Plugin settings and the tracing objects the initializer sets up; those stay nil without it.
+module RedmineOpentelemetry
   RETENTION_DAYS = 3
   # Marks a span that starts a trace for background work; see RootFilter.
   BACKGROUND_JOB = 'background.job'
@@ -19,59 +17,66 @@ module RedmineObservability
   LOG_LEVELS = { 'debug' => 5, 'info' => 9, 'warn' => 13, 'error' => 17, 'fatal' => 21 }.freeze
 
   class << self
-    attr_accessor :pipeline, :sampler, :log_bridge, :metric_exporter
+    # +pipelines+ maps each of Destinations::SIGNALS to its ExportPipeline.
+    attr_accessor :pipelines, :sampler, :log_bridge, :log_files_off, :record_metrics
+    attr_writer :log_files
 
-    def tracer = OpenTelemetry.tracer_provider.tracer('redmine_observability')
+    # Log files LogFileMute can stop; none when Redmine logs to STDOUT.
+    def log_files = @log_files || []
 
-    def settings = Setting.plugin_redmine_observability || {}
+    def tracer = OpenTelemetry.tracer_provider.tracer('redmine_opentelemetry')
+
+    def settings = Setting.plugin_redmine_opentelemetry || {}
 
     def store_traces? = settings['store_traces'] == '1'
 
     def store_logs? = settings['store_logs'] == '1'
 
+    def stop_log_files? = settings['stop_log_files'] == '1'
+
     def store_metrics? = settings['store_metrics'] == '1'
 
-    # Lowest level of the log lines stored, as a Logger severity: Redmine's own log level,
-    # config.log_level. The bridge is one of Rails.logger's broadcasts, so its level is left out.
+    # Redmine's config.log_level, from Rails.logger's broadcasts other than the bridge.
     def log_level
-      loggers = Rails.logger.respond_to?(:broadcasts) ? Rails.logger.broadcasts : [Rails.logger]
-      loggers.reject { _1.equal?(log_bridge) }.map(&:level).min || ::Logger::INFO
+      Rails.logger.broadcasts.reject { _1.equal?(log_bridge) }.map(&:level).min || ::Logger::INFO
     end
 
-    # Days the stored +signal+ (traces, logs or metrics) is kept. Settings saved before each
-    # signal had its own keep using their shared retention_days until saved again.
     def retention_days(signal)
-      days = (settings["#{signal}_retention_days"].presence || settings['retention_days']).to_i
+      days = settings["#{signal}_retention_days"].to_i
       days.positive? ? days : RETENTION_DAYS
     end
 
-    # The saved destinations, plus the database when traces are stored in Redmine.
-    def destination_rows
+    # The saved destinations, plus Redmine's database while it stores +signal+.
+    def destination_rows(signal)
       rows = Array(settings['destinations']).reject(&:blank?)
-      store_traces? ? [*rows, Destinations::DATABASE_ROW] : rows
+      public_send(:"store_#{signal}?") ? [*rows, Destinations::DATABASE_ROW] : rows
     end
 
-    # Runs on every request; rebuilds the destinations only when they change. The log bridge
-    # and metric exporter read these values instead of Setting, which can query the database.
+    # Runs on every request; the bridge, instruments and exporters read these values instead of
+    # Setting, which may query the database.
     def apply_settings
-      log_bridge&.level = store_logs? ? log_level : LogBridge::OFF
-      metric_exporter&.enabled = store_metrics?
-      return unless pipeline&.update(destination_rows)
+      return unless pipelines
 
-      OpenTelemetry.tracer_provider.sampler = pipeline.empty? ? OpenTelemetry::SDK::Trace::Samplers::ALWAYS_OFF : sampler
+      changed = pipelines.filter_map { |signal, pipeline| signal if pipeline.update(destination_rows(signal)) }
+      log_bridge.level = pipelines[:logs].empty? ? LogBridge::OFF : log_level
+      self.log_files_off = store_logs? && stop_log_files?
+      self.record_metrics = !pipelines[:metrics].empty?
+      return unless changed.include?(:traces)
+
+      OpenTelemetry.tracer_provider.sampler = pipelines[:traces].empty? ? OpenTelemetry::SDK::Trace::Samplers::ALWAYS_OFF : sampler
     rescue StandardError => e
-      Rails.logger.warn("redmine_observability: could not apply settings: #{e.message}")
+      Rails.logger.warn("redmine_opentelemetry: could not apply settings: #{e.message}")
     end
   end
 
   # Settings are re-checked on each request, so every process picks up changes.
   module SettingCachePatch
     def check_cache
-      super.tap { RedmineObservability.apply_settings }
+      super.tap { RedmineOpentelemetry.apply_settings }
     end
   end
 
-  # Hides the ?key= API key, which the mobile client sends, in URL span attributes.
+  # Hides the ?key= API key that the mobile client sends in URL span attributes.
   class ApiKeyRedactor
     URL_ATTRIBUTES = %w[http.target http.url url.full url.query].freeze
 
@@ -114,28 +119,26 @@ module RedmineObservability
     def description = "RootFilter{#{@sampler.description}}"
   end
 
-  # Each run of a Rufus job is one trace. A job scheduled with trace: false, such as
-  # a check every minute that usually finds nothing to do, gets none.
+  # One trace per Rufus job run, unless the job is scheduled with trace: false.
   module RufusJobTracing
     def do_call(time, do_rescue)
       return super if opts[:trace] == false
 
       path, line = callable.source_location
       attributes = { BACKGROUND_JOB => 'rufus', 'rufus.schedule' => original.to_s, 'code.filepath' => path, 'code.lineno' => line }.compact
-      RedmineObservability.tracer.in_span(path ? "Rufus #{File.basename(path)}:#{line}" : 'Rufus job', attributes: attributes) { super }
+      RedmineOpentelemetry.tracer.in_span(path ? "Rufus #{File.basename(path)}:#{line}" : 'Rufus job', attributes: attributes) { super }
     end
   end
 
-  # An agent run works on its own thread, after its tick or request has ended, so it is
-  # a trace of its own; the chat request it posts joins that trace.
+  # An agent run is a trace of its own, since it runs on a thread after its tick or request has ended.
   module AgentRunTracing
     def run(agent, stamp)
       attributes = { BACKGROUND_JOB => 'redmine_agent', 'agent.key' => agent['key'].to_s, 'agent.stamp' => stamp.to_s }
-      RedmineObservability.tracer.in_span('RedmineAgent run', attributes: attributes) { super }
+      RedmineOpentelemetry.tracer.in_span('RedmineAgent run', attributes: attributes) { super }
     end
   end
 
-  # Traces SQL from Rails' sql.active_record events, for any database adapter.
+  # Traces SQL from sql.active_record events, for any database adapter.
   class SqlSubscriber
     # Adapter name => [db.system, dialect for hiding literals].
     DATABASES = {
@@ -150,36 +153,34 @@ module RedmineObservability
       @tracer = tracer
     end
 
-    # Query cache hits are skipped, since they never reach the database.
     def start(_name, _id, payload)
       return if payload[:cached]
 
       adapter = payload[:connection].adapter_name.downcase
       system, dialect = DATABASES[adapter] || [adapter, :default]
       span = @tracer.start_span(payload[:name].presence || 'SQL', kind: :client, attributes: { 'db.system' => system })
-      # Literals become ?, so API keys are not stored; skipped when not recording.
       span.set_attribute('db.statement', OpenTelemetry::Helpers::SqlProcessor.obfuscate_sql(payload[:sql].to_s, adapter: dialect)) if span.recording?
-      payload[:ob_span] = span
+      payload[:ot_span] = span
     rescue StandardError => e
-      OpenTelemetry.handle_error(exception: e, message: 'redmine_observability: could not trace a query')
+      OpenTelemetry.handle_error(exception: e, message: 'redmine_opentelemetry: could not trace a query')
     end
 
     def finish(_name, _id, payload)
-      span = payload.delete(:ob_span) or return
+      span = payload.delete(:ot_span) or return
       if (error = payload[:exception_object])
         span.record_exception(error)
         span.status = OpenTelemetry::Trace::Status.error(error.class.name)
       end
       span.finish
     rescue StandardError => e
-      OpenTelemetry.handle_error(exception: e, message: 'redmine_observability: could not trace a query')
+      OpenTelemetry.handle_error(exception: e, message: 'redmine_opentelemetry: could not trace a query')
     end
   end
 
-  # Loads config/initializers/observability.rb with Redmine's; Bundler requires this file via the Gemfile.
+  # Loads config/initializers/opentelemetry.rb with Redmine's; Bundler requires this file via the Gemfile.
   class Railtie < Rails::Railtie
     config.before_initialize do |app|
-      app.paths['config/initializers'] << File.join(app.config.redmine_plugins_directory, 'redmine_observability/config/initializers')
+      app.paths['config/initializers'] << File.join(app.config.redmine_plugins_directory, 'redmine_opentelemetry/config/initializers')
     end
   end
 end

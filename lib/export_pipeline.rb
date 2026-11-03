@@ -2,49 +2,59 @@
 
 require_relative 'destinations'
 
-module RedmineObservability
-  # Sends every span to one BatchSpanProcessor per destination; #update swaps them live.
+module RedmineOpentelemetry
+  # Sends one signal to every destination that takes it: spans and log records through a batch
+  # processor per destination, metrics to each destination's exporter. #update swaps them live.
   class ExportPipeline
-    def initialize
+    def initialize(signal)
+      @signal = signal
       @rows = nil
-      @processors = [].freeze
+      @targets = [].freeze
       @mutex = Mutex.new
     end
 
-    def empty? = @processors.empty?
+    def empty? = @targets.empty?
 
-    # False when +rows+ are unchanged; old processors flush in the background.
+    # Returns false when +rows+ are unchanged; old targets flush in the background.
     def update(rows)
       @mutex.synchronize do
         return false if rows == @rows
 
-        previous = @processors
-        @processors = rows.filter_map { |text| build(text) }.freeze
+        previous = @targets
+        @targets = rows.filter_map { |text| build(text) }.freeze
         @rows = rows
         Thread.new { previous.each { _1.shutdown(timeout: 5) } } if previous.any?
         true
       end
     end
 
-    def on_start(span, parent_context) = @processors.each { _1.on_start(span, parent_context) }
+    def on_start(span, parent_context) = @targets.each { _1.on_start(span, parent_context) }
 
-    def on_finish(span) = @processors.each { _1.on_finish(span) }
+    def on_finish(span) = @targets.each { _1.on_finish(span) }
 
-    def force_flush(timeout: nil) = combine(@processors.map { _1.force_flush(timeout: timeout) })
+    def on_emit(log_record, context) = @targets.each { _1.on_emit(log_record, context) }
 
-    def shutdown(timeout: nil) = combine(@processors.map { _1.shutdown(timeout: timeout) })
+    # Untraced, since the OTLP metrics exporter does not mark its own request.
+    def export(metrics, timeout: nil)
+      OpenTelemetry::Common::Utilities.untraced { combine(@targets.map { _1.export(metrics, timeout: timeout) }) }
+    end
+
+    def force_flush(timeout: nil) = combine(@targets.map { _1.force_flush(timeout: timeout) })
+
+    def shutdown(timeout: nil) = combine(@targets.map { _1.shutdown(timeout: timeout) })
 
     private
 
     def build(text)
       row = Destinations::Row.parse(text)
-      Destinations.processor(row)
+      Destinations.target(row, @signal)
     rescue StandardError => e
-      # Names the row, never the whole text, whose headers hold API keys.
-      OpenTelemetry.handle_error(exception: e, message: "redmine_observability: skipped destination #{row&.name.presence || row&.format}")
+      # Never the whole text: its headers hold API keys.
+      OpenTelemetry.handle_error(exception: e, message: "redmine_opentelemetry: skipped #{@signal} destination #{row&.name.presence || row&.format}")
       nil
     end
 
+    # Every signal's SDK uses the same SUCCESS and FAILURE codes.
     def combine(results)
       export = OpenTelemetry::SDK::Trace::Export
       results.all?(export::SUCCESS) ? export::SUCCESS : export::FAILURE

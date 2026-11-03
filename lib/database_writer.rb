@@ -1,16 +1,14 @@
 # frozen_string_literal: true
 
-module RedmineObservability
-  # Saves an exporter's rows from its own thread, and hourly deletes rows older than the retention
-  # days of its signal: traces, logs or metrics.
+module RedmineOpentelemetry
+  # Saves an exporter's rows, and hourly deletes rows older than the retention days of their signal.
   module DatabaseWriter
-    # Longer strings, like SQL or stack traces, are cut to this length.
     MAX_VALUE_LENGTH = 4_000
     CLEANUP_INTERVAL = 3600
 
     private
 
-    # Untraced, or saving the rows would record new SQL spans, log lines and metrics;
+    # Untraced, or saving would record spans, log lines and metrics of its own SQL;
     # wrapped like a request, since an exporter runs outside one.
     def write(model, rows, time_column, signal)
       OpenTelemetry::Common::Utilities.untraced do
@@ -21,13 +19,12 @@ module RedmineObservability
       end
     end
 
-    # Each process runs this; deleting already deleted rows is harmless.
     def delete_expired(model, time_column, signal)
       now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       return if now < (@next_cleanup ||= 0)
 
       @next_cleanup = now + CLEANUP_INTERVAL
-      model.where(time_column => ...RedmineObservability.retention_days(signal).days.ago)
+      model.where(time_column => ...RedmineOpentelemetry.retention_days(signal).days.ago)
            .in_batches(of: 10_000).delete_all
     end
 

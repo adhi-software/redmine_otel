@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # A span saved by DatabaseExporter.
-class ObSpan < ApplicationRecord
+class OtSpan < ApplicationRecord
   scope :roots, -> { where(root: true) }
   scope :requests, -> { where(kind: 'server') }
 
@@ -22,14 +22,12 @@ class ObSpan < ApplicationRecord
 
   def span_attributes = parsed_details['attributes'] || {}
 
-  # Hashes of name, offset_us from the span start, and attributes.
   def events = parsed_details['events'] || []
 
   def status_message = parsed_details['status']
 
   def failed? = error? || http_status.to_i >= 500
 
-  # Picks the bar colour in the waterfall.
   def category
     return 'request' if kind == 'server'
     return 'sql' if span_attributes.key?('db.system') || span_attributes.key?('db.system.name')

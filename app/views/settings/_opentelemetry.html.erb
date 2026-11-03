@@ -1,0 +1,215 @@
+<%
+  destinations = RedmineOpentelemetry::Destinations
+  signal_labels = destinations::SIGNALS.index_with { l(:"label_ot_#{_1}") }
+  destination_options = Array(settings['destinations']).reject(&:blank?).map do |text|
+    row = destinations::Row.parse(text)
+    signals = destinations.signals(row).map { signal_labels[_1] }.join(', ')
+    label = [row.name.presence, destinations.label(row.format), row.endpoint, signals].compact.join('  |  ')
+    label += '  |  ****' if row.headers.present?
+    [label, text]
+  end
+  log_level = RedmineOpentelemetry::LogBridge::LEVEL_NAMES.fetch(RedmineOpentelemetry.log_level, 'unknown')
+  log_files = RedmineOpentelemetry.log_files.map { _1.delete_prefix("#{Rails.root}/") }.join(', ')
+%>
+
+<% unless RedmineOpentelemetry.pipelines %>
+  <div class="flash warning"><%= l(:text_ot_not_loaded) %></div>
+<% end %>
+
+<fieldset>
+  <legend><%= l(:label_ot_storage) %></legend>
+  <% %w[traces logs metrics].each do |signal| %>
+    <p>
+      <label for="settings_store_<%= signal %>"><%= l(:"label_ot_store_#{signal}") %></label>
+      <%= hidden_field_tag "settings[store_#{signal}]", '0', id: nil %>
+      <%= check_box_tag "settings[store_#{signal}]", '1', settings["store_#{signal}"] == '1', id: "settings_store_#{signal}" %>
+      <span class="ot-store-option">
+        <label class="inline" for="settings_<%= signal %>_retention_days"><%= l(:label_ot_keep_for) %></label>
+        <%= number_field_tag "settings[#{signal}_retention_days]", RedmineOpentelemetry.retention_days(signal), min: 1, max: 365,
+              placeholder: RedmineOpentelemetry::RETENTION_DAYS, id: "settings_#{signal}_retention_days", class: 'ot-days' %>
+        <%= l(:label_day_plural) %>
+      </span>
+      <em class="info">
+        <%= l(:"text_ot_store_#{signal}") %>
+        <% if signal == 'traces' %>
+          <%= link_to l(:label_ot_opentelemetry), ot_traces_path %>
+        <% elsif signal == 'logs' %>
+          <%= l(:text_ot_log_level, level: l(:"label_ot_level_#{log_level}")) %>
+          <%= l(:text_ot_log_level_debug) if log_level == 'debug' %>
+        <% end %>
+      </em>
+    </p>
+    <% if signal == 'logs' && log_files.present? %>
+      <p>
+        <label for="settings_stop_log_files"><%= l(:label_ot_stop_log_files) %></label>
+        <%= hidden_field_tag 'settings[stop_log_files]', '0', id: nil %>
+        <%= check_box_tag 'settings[stop_log_files]', '1', settings['stop_log_files'] == '1', id: 'settings_stop_log_files' %>
+        <em class="info"><%= l(:text_ot_stop_log_files, files: log_files) %></em>
+      </p>
+    <% end %>
+  <% end %>
+</fieldset>
+
+<fieldset>
+  <legend><%= l(:label_ot_recording) %></legend>
+  <p>
+    <label for="settings_destinations"><%= l(:label_ot_destinations) %></label>
+    <%= hidden_field_tag 'settings[destinations][]', '', id: nil %>
+    <%= select_tag 'settings[destinations][]', options_for_select(destination_options),
+          multiple: true, size: 6, id: 'settings_destinations', class: 'ot-destinations multi-row' %>
+    <em class="info"><%= l(:text_ot_destinations) %></em>
+  </p>
+  <p>
+    <%= link_to l(:button_add), '#', class: 'button', data: { destination_action: 'add' } %> |
+    <%= link_to l(:button_edit), '#', class: 'button', data: { destination_action: 'edit' } %> |
+    <%= link_to l(:button_delete), '#', class: 'button', data: { destination_action: 'delete' } %>
+  </p>
+</fieldset>
+
+<div id="ot-destination-dlg" title="<%= l(:label_ot_destination) %>" style="display:none;">
+  <table class="ot-dialog">
+    <tr>
+      <th><label for="ot_name"><%= l(:field_name) %></label></th>
+      <td><%= text_field_tag 'ot_name', '', name: nil %></td>
+    </tr>
+    <tr>
+      <th><label for="ot_format"><%= l(:label_ot_format) %></label></th>
+      <td>
+        <%= select_tag 'ot_format',
+              options_for_select(destinations.formats.map { |format|
+                [format.label, format.key,
+                 { 'data-name' => format.name, 'data-endpoint' => format.endpoint, 'data-signals' => format.signals.join(' ') }]
+              }), name: nil %>
+      </td>
+    </tr>
+    <tr>
+      <th><%= l(:label_ot_send) %></th>
+      <td>
+        <% destinations::SIGNALS.each do |signal| %>
+          <label class="ot-signal">
+            <%= check_box_tag "ot_#{signal}", '1', signal == :traces, name: nil, disabled: signal == :traces,
+                              data: { signal: signal, label: signal_labels[signal] } %>
+            <%= signal_labels[signal] %>
+          </label>
+        <% end %>
+        <em class="info"><%= l(:text_ot_signals) %></em>
+      </td>
+    </tr>
+    <tr>
+      <th><label for="ot_endpoint"><%= l(:label_ot_endpoint) %></label></th>
+      <td><%= text_field_tag 'ot_endpoint', '', name: nil %></td>
+    </tr>
+    <tr>
+      <th><label for="ot_headers"><%= l(:label_ot_headers) %></label></th>
+      <td>
+        <%= text_field_tag 'ot_headers', '', name: nil, autocomplete: 'off' %>
+        <em class="info"><%= l(:text_ot_headers) %></em>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<style type="text/css">
+  .ot-destinations { min-width: 420px; max-width: 100%; }
+  .ot-store-option { display: inline-block; margin-inline-start: 16px; white-space: nowrap; }
+  .tabular .ot-store-option label.inline { display: inline; }
+  .tabular input.ot-days { width: 5em; }
+  table.ot-dialog { width: 100%; border-spacing: 8px 10px; }
+  table.ot-dialog th { text-align: left; white-space: nowrap; width: 80px; vertical-align: top; }
+  table.ot-dialog input, table.ot-dialog select { width: 100%; box-sizing: border-box; }
+  table.ot-dialog input::placeholder { color: #a5adba; opacity: 1; }
+  table.ot-dialog .ot-signal { display: inline-block; margin-right: 16px; white-space: nowrap; }
+  table.ot-dialog .ot-signal input { width: auto; }
+</style>
+
+<%= javascript_tag do %>
+  $(function () {
+    var list = $('#settings_destinations');
+    var dialog = $('#ot-destination-dlg');
+    var name = $('#ot_name');
+    var format = $('#ot_format');
+    var endpoint = $('#ot_endpoint');
+    var headers = $('#ot_headers');
+    var logs = $('#ot_logs');
+    var metrics = $('#ot_metrics');
+    var editing = null;
+
+    function showFormat() {
+      var selected = format.find('option:selected');
+      var signals = String(selected.attr('data-signals')).split(' ');
+      name.attr('placeholder', selected.attr('data-name'));
+      endpoint.attr('placeholder', selected.attr('data-endpoint'));
+      $.each([logs, metrics], function (_, box) {
+        var supported = signals.indexOf(box.data('signal')) >= 0;
+        box.prop('disabled', !supported);
+        if (!supported) box.prop('checked', false);
+      });
+    }
+
+    function save() {
+      var row = {
+        name: String(name.val()).trim(),
+        format: format.val(),
+        endpoint: String(endpoint.val()).trim(),
+        headers: String(headers.val()).trim(),
+        logs: logs.prop('checked') ? '1' : '0',
+        metrics: metrics.prop('checked') ? '1' : '0'
+      };
+      if (!/^https?:\/\/\S+$/.test(row.endpoint)) {
+        alert("<%= escape_javascript(l(:text_ot_invalid_endpoint)) %>");
+        return;
+      }
+      var signals = $('.ot-signal input:checked').map(function () { return $(this).data('label'); }).get().join(', ');
+      var label = [row.name, format.find('option:selected').text(), row.endpoint, signals].filter(Boolean).join('  |  ');
+      var option = editing || $('<option>').appendTo(list);
+      option.val(JSON.stringify(row));
+      option.text(label + (row.headers ? '  |  ****' : ''));
+      dialog.dialog('close');
+    }
+
+    dialog.dialog({
+      autoOpen: false, modal: true, width: 560,
+      buttons: [
+        { text: "<%= escape_javascript(l(:button_save)) %>", click: save },
+        { text: "<%= escape_javascript(l(:button_cancel)) %>", click: function () { dialog.dialog('close'); } }
+      ]
+    });
+    format.on('change', showFormat);
+
+    $('[data-destination-action]').on('click', function (event) {
+      event.preventDefault();
+      var action = $(this).attr('data-destination-action');
+      var selected = list.find('option:selected');
+      if (action === 'add') {
+        editing = null;
+        name.val('');
+        format.prop('selectedIndex', 0);
+        endpoint.val('');
+        headers.val('');
+        logs.prop('checked', false);
+        metrics.prop('checked', false);
+        showFormat();
+        dialog.dialog('open');
+      } else if (!selected.length) {
+        alert("<%= escape_javascript(l(:text_ot_select_row)) %>");
+      } else if (action === 'edit') {
+        editing = selected.first();
+        var row = JSON.parse(editing.val());
+        name.val(row.name);
+        format.val(row.format);
+        endpoint.val(row.endpoint);
+        headers.val(row.headers);
+        logs.prop('checked', row.logs === '1');
+        metrics.prop('checked', row.metrics === '1');
+        showFormat();
+        dialog.dialog('open');
+      } else if (confirm("<%= escape_javascript(l(:text_are_you_sure)) %>")) {
+        selected.remove();
+      }
+    });
+
+    list.closest('form').on('submit', function () {
+      list.find('option').prop('selected', true);
+    });
+  });
+<% end %>
