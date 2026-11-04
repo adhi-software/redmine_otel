@@ -14,15 +14,10 @@ en:
   text_ot_not_loaded: "Tracing is off because the plugin was not loaded when Redmine started. Run bundle install and restart Redmine."
   label_ot_storage: Store data
   label_ot_store_traces: Store traces
-  text_ot_store_traces: Requests, SQL queries and HTTP calls, shown in
   label_ot_store_logs: Store logs
-  text_ot_store_logs: Log lines, with the request that wrote them.
-  text_ot_log_level: "Level: %{level}, from config.log_level."
-  text_ot_log_level_debug: Debug includes SQL values such as API tokens.
   label_ot_stop_log_files: Stop log file
-  text_ot_stop_log_files: "While logs are stored, nothing is written to %{files}. Lines that cannot be saved, such as while the database is down, are lost."
+  text_ot_stop_log_files: "Logs go only to the database, not to %{files}. Lines are lost while the database is down."
   label_ot_store_metrics: Store metrics
-  text_ot_store_metrics: Request and SQL durations, threads, connections and memory, every minute.
   label_ot_keep_for: Keep for
   text_ot_traces_off: Traces are not being stored. Turn on "Store traces" in the plugin settings.
   text_ot_logs_off: Logs are not being stored. Turn on "Store logs" in the plugin settings.
@@ -92,7 +87,7 @@ en:
   label_ot_level_error: Error
   label_ot_level_fatal: Fatal
   label_ot_level_unknown: Unknown
-  label_ot_message: Message
+  label_ot_message_or_trace_id: Message or trace ID
   label_ot_x_logs:
     one: 1 log line
     other: "%{count} log lines"

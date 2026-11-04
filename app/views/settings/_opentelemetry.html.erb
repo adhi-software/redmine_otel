@@ -8,7 +8,6 @@
     label += '  |  ****' if row.headers.present?
     [label, text]
   end
-  log_level = RedmineOpentelemetry::LogBridge::LEVEL_NAMES.fetch(RedmineOpentelemetry.log_level, 'unknown')
   log_files = RedmineOpentelemetry.log_files.map { _1.delete_prefix("#{Rails.root}/") }.join(', ')
 %>
 
@@ -18,36 +17,47 @@
 
 <fieldset>
   <legend><%= l(:label_ot_storage) %></legend>
-  <% %w[traces logs metrics].each do |signal| %>
+  <p>
+    <label for="settings_store_traces"><%= l(:label_ot_store_traces) %></label>
+    <%= hidden_field_tag 'settings[store_traces]', '0', id: nil %>
+    <%= check_box_tag 'settings[store_traces]', '1', settings['store_traces'] == '1', id: 'settings_store_traces' %>
+    <span class="ot-store-option">
+      <label class="inline" for="settings_traces_retention_days"><%= l(:label_ot_keep_for) %></label>
+      <%= number_field_tag 'settings[traces_retention_days]', RedmineOpentelemetry.retention_days('traces'), min: 1, max: 365,
+            placeholder: RedmineOpentelemetry::RETENTION_DAYS, id: 'settings_traces_retention_days', class: 'ot-days' %>
+      <%= l(:label_day_plural) %>
+    </span>
+  </p>
+  <p>
+    <label for="settings_store_logs"><%= l(:label_ot_store_logs) %></label>
+    <%= hidden_field_tag 'settings[store_logs]', '0', id: nil %>
+    <%= check_box_tag 'settings[store_logs]', '1', settings['store_logs'] == '1', id: 'settings_store_logs' %>
+    <span class="ot-store-option">
+      <label class="inline" for="settings_logs_retention_days"><%= l(:label_ot_keep_for) %></label>
+      <%= number_field_tag 'settings[logs_retention_days]', RedmineOpentelemetry.retention_days('logs'), min: 1, max: 365,
+            placeholder: RedmineOpentelemetry::RETENTION_DAYS, id: 'settings_logs_retention_days', class: 'ot-days' %>
+      <%= l(:label_day_plural) %>
+    </span>
+  </p>
+  <% if log_files.present? %>
     <p>
-      <label for="settings_store_<%= signal %>"><%= l(:"label_ot_store_#{signal}") %></label>
-      <%= hidden_field_tag "settings[store_#{signal}]", '0', id: nil %>
-      <%= check_box_tag "settings[store_#{signal}]", '1', settings["store_#{signal}"] == '1', id: "settings_store_#{signal}" %>
-      <span class="ot-store-option">
-        <label class="inline" for="settings_<%= signal %>_retention_days"><%= l(:label_ot_keep_for) %></label>
-        <%= number_field_tag "settings[#{signal}_retention_days]", RedmineOpentelemetry.retention_days(signal), min: 1, max: 365,
-              placeholder: RedmineOpentelemetry::RETENTION_DAYS, id: "settings_#{signal}_retention_days", class: 'ot-days' %>
-        <%= l(:label_day_plural) %>
-      </span>
-      <em class="info">
-        <%= l(:"text_ot_store_#{signal}") %>
-        <% if signal == 'traces' %>
-          <%= link_to l(:label_ot_opentelemetry), ot_traces_path %>
-        <% elsif signal == 'logs' %>
-          <%= l(:text_ot_log_level, level: l(:"label_ot_level_#{log_level}")) %>
-          <%= l(:text_ot_log_level_debug) if log_level == 'debug' %>
-        <% end %>
-      </em>
+      <label for="settings_stop_log_files"><%= l(:label_ot_stop_log_files) %></label>
+      <%= hidden_field_tag 'settings[stop_log_files]', '0', id: nil %>
+      <%= check_box_tag 'settings[stop_log_files]', '1', settings['stop_log_files'] == '1', id: 'settings_stop_log_files' %>
+      <em class="info"><%= l(:text_ot_stop_log_files, files: log_files) %></em>
     </p>
-    <% if signal == 'logs' && log_files.present? %>
-      <p>
-        <label for="settings_stop_log_files"><%= l(:label_ot_stop_log_files) %></label>
-        <%= hidden_field_tag 'settings[stop_log_files]', '0', id: nil %>
-        <%= check_box_tag 'settings[stop_log_files]', '1', settings['stop_log_files'] == '1', id: 'settings_stop_log_files' %>
-        <em class="info"><%= l(:text_ot_stop_log_files, files: log_files) %></em>
-      </p>
-    <% end %>
   <% end %>
+  <p>
+    <label for="settings_store_metrics"><%= l(:label_ot_store_metrics) %></label>
+    <%= hidden_field_tag 'settings[store_metrics]', '0', id: nil %>
+    <%= check_box_tag 'settings[store_metrics]', '1', settings['store_metrics'] == '1', id: 'settings_store_metrics' %>
+    <span class="ot-store-option">
+      <label class="inline" for="settings_metrics_retention_days"><%= l(:label_ot_keep_for) %></label>
+      <%= number_field_tag 'settings[metrics_retention_days]', RedmineOpentelemetry.retention_days('metrics'), min: 1, max: 365,
+            placeholder: RedmineOpentelemetry::RETENTION_DAYS, id: 'settings_metrics_retention_days', class: 'ot-days' %>
+      <%= l(:label_day_plural) %>
+    </span>
+  </p>
 </fieldset>
 
 <fieldset>

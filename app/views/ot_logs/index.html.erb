@@ -8,18 +8,9 @@
   </span>
   <span class="ot-filter">
     <label for="q"><%= l(:label_search) %>:</label>
-    <%= text_field_tag 'q', params[:q], size: 25, placeholder: l(:label_ot_message) %>
+    <%= text_field_tag 'q', params[:q], size: 25, placeholder: l(:label_ot_message_or_trace_id) %>
   </span>
   <%= render 'opentelemetry/period_filter', period: params[:period] %>
-  <% if params[:trace_id].present? %>
-    <span class="ot-filter">
-      <%= hidden_field_tag 'trace_id', params[:trace_id] %>
-      <span class="ot-tag ot-filter-chip" title="<%= params[:trace_id] %>">
-        <%= l(:label_ot_trace_id) %> <%= params[:trace_id].to_s.first(7) %>
-        <%= link_to '×', ot_logs_path(filter_params.except('trace_id')), title: l(:button_clear), 'aria-label': l(:button_clear) %>
-      </span>
-    </span>
-  <% end %>
   <span class="ot-filter">
     <%= submit_tag l(:button_apply), class: 'small', name: nil %>
     <%= link_to sprite_icon('reload', l(:button_clear)), ot_logs_path, class: 'icon icon-reload' %>
@@ -48,7 +39,7 @@
         <span class="ot-level"><%= log.severity_text.presence || log.level.upcase %></span>
         <span class="ot-log-message"><%= log.summary %><% if log.multiline? %> <span class="ot-more">…</span><% end %></span>
         <% if log.trace_id %>
-          <%= link_to log.trace_id.first(7), ot_logs_path(trace_id: log.trace_id, sort: 'logged_at'),
+          <%= link_to log.trace_id.first(7), ot_logs_path(q: log.trace_id, sort: 'logged_at'),
                       class: 'ot-log-trace', title: l(:text_ot_same_request) %>
         <% else %>
           <span></span>

@@ -5,7 +5,7 @@ class OtMetricsController < OtBaseController
   menu_item :ot_traces
   helper :ot_metrics
 
-  FILTERS = %w[name series period from to].freeze
+  FILTERS = %w[name q period from to].freeze
 
   DEFAULT_METRIC = 'http.server.request.duration'
   DEFAULT_PERIOD = '6h'
@@ -49,7 +49,9 @@ class OtMetricsController < OtBaseController
 
   def filtered_points(name)
     scope = OtMetric.where(name: name)
-    scope = scope.where(series: params[:series]) if params[:series].present?
+    params[:q].to_s.split.each do |word|
+      scope = scope.where(OtMetric.arel_table[:series].matches("%#{OtMetric.sanitize_sql_like(word)}%"))
+    end
     from, to = period_range(params.fetch(:period, DEFAULT_PERIOD))
     scope = scope.where(recorded_at: from..to) if from || to
     scope

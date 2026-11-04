@@ -5,7 +5,7 @@ class OtLogsController < OtBaseController
   menu_item :ot_traces
   helper :ot_logs
 
-  FILTERS = %w[level q period from to trace_id].freeze
+  FILTERS = %w[level q period from to].freeze
 
   def index
     sort_init 'logged_at', 'desc'
@@ -32,9 +32,11 @@ class OtLogsController < OtBaseController
     scope = scope.where(severity_number: lowest..) if lowest
     from, to = period_range
     scope = scope.where(logged_at: from..to) if from || to
-    scope = scope.where(trace_id: params[:trace_id]) if params[:trace_id].to_s.match?(TRACE_ID)
-    if params[:q].present?
-      pattern = "%#{OtLog.sanitize_sql_like(params[:q].strip)}%"
+    q = params[:q].to_s.strip
+    if q.match?(TRACE_ID)
+      scope = scope.where(trace_id: q.downcase)
+    elsif q.present?
+      pattern = "%#{OtLog.sanitize_sql_like(q)}%"
       scope = scope.where(OtLog.arel_table[:body].matches(pattern))
     end
     scope

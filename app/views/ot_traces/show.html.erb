@@ -14,7 +14,7 @@
     <% end %>
     <div><dt><%= l(:label_ot_spans) %></dt><dd><%= @rows.size %></dd></div>
     <% if @log_count > 0 %>
-      <div><dt><%= l(:label_ot_logs) %></dt><dd><%= link_to l(:label_ot_x_logs, count: @log_count), ot_logs_path(trace_id: params[:id], sort: 'logged_at') %></dd></div>
+      <div><dt><%= l(:label_ot_logs) %></dt><dd><%= link_to l(:label_ot_x_logs, count: @log_count), ot_logs_path(q: params[:id], sort: 'logged_at') %></dd></div>
     <% end %>
     <div><dt><%= l(:label_ot_trace_id) %></dt><dd><code><%= params[:id] %></code></dd></div>
     <% if @root.target %><div><dt><%= l(:label_ot_path) %></dt><dd><code><%= @root.target %></code></dd></div><% end %>

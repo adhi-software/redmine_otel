@@ -45,6 +45,10 @@ module OtMetricsHelper
     end, ' ')
   end
 
+  def ot_series_query(series)
+    OtMetric.labels(series).values.join(' ')
+  end
+
   def ot_bucket_label(minutes)
     key, count = if (minutes % 1440).zero? then ['x_days', minutes / 1440]
                  elsif (minutes % 60).zero? then ['x_hours', minutes / 60]

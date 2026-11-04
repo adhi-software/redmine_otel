@@ -4,18 +4,13 @@
 <fieldset class="ot-filters"><legend><%= l(:label_filter_plural) %></legend>
   <span class="ot-filter">
     <label for="name"><%= l(:label_ot_metric) %>:</label>
-    <%= select_tag 'name', options_for_select(@names, @name), onchange: "$('#series').remove(); this.form.submit();" %>
+    <%= select_tag 'name', options_for_select(@names, @name), onchange: "$('#q').val(''); this.form.submit();" %>
+  </span>
+  <span class="ot-filter">
+    <label for="q"><%= l(:label_search) %>:</label>
+    <%= text_field_tag 'q', params[:q], size: 25, placeholder: l(:label_ot_series) %>
   </span>
   <%= render 'opentelemetry/period_filter', period: @period %>
-  <% if params[:series].present? %>
-    <span class="ot-filter">
-      <%= hidden_field_tag 'series', params[:series] %>
-      <span class="ot-tag ot-filter-chip" title="<%= params[:series] %>">
-        <%= l(:label_ot_series) %>: <%= OtMetric.labels(params[:series]).values.join(' · ').truncate(80) %>
-        <%= link_to '×', ot_metrics_path(filter_params.except('series')), title: l(:button_clear), 'aria-label': l(:button_clear) %>
-      </span>
-    </span>
-  <% end %>
   <span class="ot-filter">
     <%= submit_tag l(:button_apply), class: 'small', name: nil %>
     <%= link_to sprite_icon('reload', l(:button_clear)), ot_metrics_path, class: 'icon icon-reload' %>
@@ -62,9 +57,10 @@
       </thead>
       <tbody>
         <% @series.each do |series, summary| %>
-          <tr class="<%= 'ot-selected' if series == params[:series] %>">
+          <% query = ot_series_query(series) %>
+          <tr class="<%= 'ot-selected' if params[:q].present? && query == params[:q].strip %>">
             <td class="ot-series-name">
-              <%= link_to ot_series_labels(series), ot_metrics_path(filter_params.merge('series' => series)), title: l(:text_ot_click_series) %>
+              <%= link_to ot_series_labels(series), ot_metrics_path(filter_params.merge('q' => query)), title: l(:text_ot_click_series) %>
             </td>
             <% ot_metric_stats(summary, @shape, unit).each do |_, value| %><td class="ot-number"><%= value %></td><% end %>
           </tr>
