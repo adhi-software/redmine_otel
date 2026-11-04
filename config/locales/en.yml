@@ -103,16 +103,30 @@ en:
   label_ot_span_id: Span ID
   label_ot_metric: Metric
   label_ot_series: Series
+  label_ot_series_hint: Attribute values, e.g. GET 500
   label_ot_x_series:
     one: 1 series
     other: "%{count} series"
   label_ot_no_attributes: All
+  label_ot_shape_histogram: Histogram
+  label_ot_shape_gauge: Gauge
+  label_ot_shape_sum: Counter
+  label_ot_unit: Unit
   label_ot_count: Count
   label_ot_average: Average
+  label_ot_min: Min
   label_ot_max: Max
+  label_ot_range: Min – max
   label_ot_total: Total
+  label_ot_value: Value
+  label_ot_per_minute: Per minute
+  label_ot_throughput: Throughput
+  label_ot_errors: 5xx errors
+  label_ot_impact: Impact
+  text_ot_impact_histogram: Share of the total time spent
+  text_ot_impact_sum: Share of the total
+  text_ot_percentiles_skipped: Average and max; percentiles need a shorter period.
   text_ot_bucket: "Each point covers %{value}."
-  text_ot_click_series: Chart this series alone
   text_ot_delete_metric: Delete this metric's data matching these filters? This cannot be undone.
   text_ot_delete_selected_series: Delete the selected series' data in this period? This cannot be undone.
   notice_ot_metrics_deleted:

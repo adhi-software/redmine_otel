@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 module OtMetricsHelper
+  def ot_metric_options(names, selected)
+    grouped_options_for_select(names.group_by { _1.split('.').first }, selected)
+  end
+
   def ot_metric_value(value, unit)
     return '-' if value.nil?
 
@@ -14,39 +18,48 @@ module OtMetricsHelper
     end
   end
 
-  # [label, value] pairs summing up +summary+ for its +shape+.
-  def ot_metric_stats(summary, shape, unit)
+  # [label, value, raw] triples summing up +summary+ for its +shape+.
+  def ot_metric_stats(summary, shape, unit, percentiles = nil)
     case shape
     when :histogram
-      [[l(:label_ot_count), number_with_delimiter(summary.samples.to_i)],
-       [l(:label_ot_average), ot_metric_value(summary.average(shape), unit)],
-       [l(:label_ot_max), ot_metric_value(summary.maximum(shape), unit)]]
+      middle = percentiles&.map { |percent, value| ot_stat("p#{percent}", value, unit) } || [ot_stat(l(:label_ot_average), summary.average(shape), unit)]
+      [[l(:label_ot_count), number_with_delimiter(summary.samples.to_i), summary.samples.to_i],
+       *middle, ot_stat(l(:label_ot_max), summary.maximum(shape), unit)]
     when :sum
-      [[l(:label_ot_total), ot_metric_value(summary.total.to_f, unit)]]
+      [ot_stat(l(:label_ot_total), summary.total.to_f, unit)]
     else
-      [[l(:label_ot_average), ot_metric_value(summary.average(shape), unit)],
-       [l(:label_ot_max), ot_metric_value(summary.maximum(shape), unit)]]
+      [ot_stat(l(:label_ot_average), summary.average(shape), unit), ot_stat(l(:label_ot_min), summary.minimum, unit),
+       ot_stat(l(:label_ot_max), summary.maximum(shape), unit)]
     end
+  end
+
+  def ot_metric_tiles(summary, shape, unit, percentiles, error_rate)
+    return ot_metric_stats(summary, shape, unit).map { _1.first(2) } unless shape == :histogram
+
+    tiles = [[l(:label_ot_count), number_with_delimiter(summary.samples.to_i)]]
+    tiles << [l(:label_ot_errors), number_to_percentage(error_rate * 100, precision: 1)] if error_rate
+    latency = if percentiles
+                percentiles.slice(95, 99).map { |percent, value| ["p#{percent}", value] }
+              else
+                [[l(:label_ot_average), summary.average(shape)], [l(:label_ot_max), summary.maximum(shape)]]
+              end
+    tiles + latency.map { |label, value| [label, ot_metric_value(value, unit)] }
+  end
+
+  def ot_sort_value(value)
+    value.is_a?(Float) ? format('%.9f', value) : value.to_s
+  end
+
+  def ot_series_value(key, value)
+    return value.to_s unless key == OtMetricsController::STATUS
+
+    content_tag(:span, value, class: "ot-label ot-status-#{value.to_i / 100}xx")
   end
 
   def ot_chart_labels
-    { count: l(:label_ot_count), average: l(:label_ot_average), max: l(:label_ot_max), total: l(:label_ot_total) }
-  end
-
-  def ot_series_labels(series)
-    labels = OtMetric.labels(series)
-    if labels.empty?
-      return content_tag(:span, series == '{}' ? l(:label_ot_no_attributes) : series, class: 'ot-label-key')
-    end
-
-    safe_join(labels.map do |key, value|
-      css = key == 'http.response.status_code' ? "ot-label ot-status-#{value.to_i / 100}xx" : 'ot-label'
-      content_tag(:span, safe_join([content_tag(:span, key, class: 'ot-label-key'), value.to_s], ' '), class: css)
-    end, ' ')
-  end
-
-  def ot_series_query(series)
-    OtMetric.labels(series).values.join(' ')
+    { average: l(:label_ot_average), max: l(:label_ot_max), min: l(:label_ot_min), range: l(:label_ot_range),
+      rate: l(:label_ot_per_minute), ok: l(:label_ot_ok), errors: l(:label_ot_error),
+      p50: 'p50', p95: 'p95', p99: 'p99' }
   end
 
   def ot_bucket_label(minutes)
@@ -55,5 +68,11 @@ module OtMetricsHelper
                  else ['x_minutes', minutes]
                  end
     l("datetime.distance_in_words.#{key}", count: count)
+  end
+
+  private
+
+  def ot_stat(label, value, unit)
+    [label, ot_metric_value(value, unit), value]
   end
 end

@@ -4,11 +4,11 @@
 <fieldset class="ot-filters"><legend><%= l(:label_filter_plural) %></legend>
   <span class="ot-filter">
     <label for="name"><%= l(:label_ot_metric) %>:</label>
-    <%= select_tag 'name', options_for_select(@names, @name), onchange: "$('#q').val(''); this.form.submit();" %>
+    <%= select_tag 'name', ot_metric_options(@names, @name), onchange: "$('#q').val(''); this.form.submit();" %>
   </span>
   <span class="ot-filter">
     <label for="q"><%= l(:label_search) %>:</label>
-    <%= text_field_tag 'q', params[:q], size: 25, placeholder: l(:label_ot_series) %>
+    <%= text_field_tag 'q', params[:q], size: 25, placeholder: l(:label_ot_series_hint) %>
   </span>
   <%= render 'opentelemetry/period_filter', period: @period %>
   <span class="ot-filter">
@@ -23,24 +23,47 @@
   <p class="nodata"><%= l(:label_no_data) %></p>
 <% else %>
   <% unit = @latest.unit %>
-  <% stats = ot_metric_stats(@summary, @shape, unit) %>
+  <% stats = ot_metric_stats(@summary, @shape, unit, @percentiles) %>
+  <% keys = @series.flat_map { OtMetric.labels(_1.first).keys }.uniq %>
+  <% impact = @shape != :gauge && @summary.total.to_f.positive? %>
   <div class="ot-chart">
     <div class="ot-chart-head">
-      <div>
+      <div class="ot-metric-title">
         <strong><%= @name %></strong>
-        <span class="ot-chart-note"><%= [@latest.description, l(:text_ot_bucket, value: ot_bucket_label(@bucket_size))].compact.join(' · ') %></span>
+        <span class="ot-tag"><%= l(:"label_ot_shape_#{@shape}") %></span>
+        <% if unit %><span class="ot-tag" title="<%= l(:label_ot_unit) %>"><%= unit.delete('{}') %></span><% end %>
       </div>
+      <span class="ot-chart-note"><%= l(:text_ot_bucket, value: ot_bucket_label(@bucket_size)) %></span>
     </div>
+    <% if @latest.description %><p class="ot-chart-note ot-metric-description"><%= @latest.description %></p><% end %>
     <dl class="ot-metric-stats">
-      <% stats.each do |label, value| %>
+      <% ot_metric_tiles(@summary, @shape, unit, @percentiles, @error_rate).each do |label, value| %>
         <div><dt><%= label %></dt><dd><%= value %></dd></div>
       <% end %>
     </dl>
-    <div class="ot-chart-plot ot-metric-plot">
-      <%= content_tag :canvas, '', id: 'ot-metric-chart', role: 'img', 'aria-label': @name,
-                      data: { points: @points.to_json, shape: @shape, unit: unit, zone: ot_zone_name, labels: ot_chart_labels.to_json } %>
-    </div>
   </div>
+
+  <%= content_tag :div, id: 'ot-metric-charts', class: 'ot-metric-charts',
+                  data: { points: @points.to_json, shape: @shape, unit: unit, zone: ot_zone_name, labels: ot_chart_labels.to_json } do %>
+    <% if @shape == :histogram %>
+      <% title = %w[s ms].include?(unit) ? l(:label_ot_duration) : l(:label_ot_value) %>
+      <div class="ot-chart">
+        <div class="ot-chart-head">
+          <strong><%= title %></strong>
+          <% if @percentiles_skipped %><span class="ot-chart-note"><%= l(:text_ot_percentiles_skipped) %></span><% end %>
+        </div>
+        <div class="ot-chart-plot"><canvas id="ot-duration-chart" role="img" aria-label="<%= title %>"></canvas></div>
+      </div>
+    <% end %>
+    <% title = @shape == :gauge ? l(:label_ot_value) : l(:label_ot_throughput) %>
+    <div class="ot-chart">
+      <div class="ot-chart-head">
+        <strong><%= title %></strong>
+        <span class="ot-chart-note"><%= @shape == :gauge ? unit&.delete('{}') : l(:label_ot_per_minute) %></span>
+      </div>
+      <div class="ot-chart-plot"><canvas id="ot-<%= @shape == :gauge ? 'value' : 'rate' %>-chart" role="img" aria-label="<%= title %>"></canvas></div>
+    </div>
+  <% end %>
 
   <div class="ot-results-header">
     <label class="ot-select-all" title="<%= l(:button_check_all) %> / <%= l(:button_uncheck_all) %>">
@@ -54,25 +77,38 @@
   </div>
   <%= render 'opentelemetry/delete_selected', url: ot_metrics_path(filter_params) %>
   <div class="autoscroll">
-    <table class="list ot-series">
+    <table class="list ot-series" data-controller="tablesort">
       <thead>
         <tr>
-          <th class="checkbox"></th>
-          <th class="ot-series-name"><%= l(:label_ot_series) %></th>
+          <th class="checkbox no-sort" data-sort-method="none"></th>
+          <% if keys.empty? %><th class="ot-series-name"><%= l(:label_ot_series) %></th><% end %>
+          <% keys.each do |key| %><th class="ot-series-name"><%= key %></th><% end %>
           <% stats.each do |label, _| %><th class="ot-number"><%= label %></th><% end %>
+          <% if impact %><th class="ot-impact" title="<%= l(:"text_ot_impact_#{@shape}") %>"><%= l(:label_ot_impact) %></th><% end %>
         </tr>
       </thead>
       <tbody>
         <% @series.each do |series, summary| %>
-          <% query = ot_series_query(series) %>
-          <tr class="<%= 'ot-selected' if params[:q].present? && query == params[:q].strip %>">
+          <% labels = OtMetric.labels(series) %>
+          <tr>
             <td class="checkbox">
-              <%= check_box_tag 'ids[]', series, false, id: nil, form: 'ot-delete-selected', 'aria-label': query.presence || series %>
+              <%= check_box_tag 'ids[]', series, false, id: nil, form: 'ot-delete-selected', 'aria-label': labels.values.join(' ').presence || series %>
             </td>
-            <td class="ot-series-name">
-              <%= link_to ot_series_labels(series), ot_metrics_path(filter_params.merge('q' => query)), title: l(:text_ot_click_series) %>
-            </td>
-            <% ot_metric_stats(summary, @shape, unit).each do |_, value| %><td class="ot-number"><%= value %></td><% end %>
+            <% if keys.empty? %>
+              <td class="ot-series-name"><%= l(:label_ot_no_attributes) %></td>
+            <% end %>
+            <% keys.each do |key| %>
+              <td class="ot-series-name"><%= ot_series_value(key, labels[key]) if labels.key?(key) %></td>
+            <% end %>
+            <% ot_metric_stats(summary, @shape, unit, @percentiles && @series_percentiles[series]).each do |_, value, raw| %>
+              <td class="ot-number" data-sort="<%= ot_sort_value(raw) %>"><%= value %></td>
+            <% end %>
+            <% if impact %>
+              <% share = summary.total.to_f / @summary.total.to_f %>
+              <td class="ot-impact" data-sort="<%= ot_sort_value(share) %>">
+                <span class="ot-meter"><span style="width: <%= (share * 100).round(1) %>%;"></span></span><%= number_to_percentage(share * 100, precision: 1) %>
+              </td>
+            <% end %>
           </tr>
         <% end %>
       </tbody>
@@ -82,86 +118,164 @@
 </div>
 
 <style type="text/css">
-  .ot-metric-stats { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 4px 0 12px; }
+  .ot-metric-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .ot-metric-title strong { margin-right: 4px; font-size: 1.15em; }
+  p.ot-metric-description { margin: 0; }
+  .ot-metric-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 8px; margin: 12px 0 8px; }
+  .ot-metric-stats > div { padding: 8px 12px; border: 1px solid var(--ot-line); border-radius: 6px; }
   .ot-metric-stats dt { margin: 0 0 2px; font-size: 0.8em; font-weight: 600; color: var(--ot-text-muted); }
-  .ot-metric-stats dd { margin: 0; font-size: 1.3em; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ot-text); }
-  .ot-chart-plot.ot-metric-plot { height: 240px; }
-  table.ot-series th.ot-series-name, table.ot-series td.ot-series-name { text-align: left; }
-  table.ot-series .ot-number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  table.ot-series tr.ot-selected td, table.ot-series tr:has(input:checked) td { background: var(--ot-accent-soft); }
-  table.ot-series a:hover { text-decoration: none; }
-  table.ot-series a:hover .ot-label { box-shadow: inset 0 0 0 1px var(--ot-accent); }
-  .ot-label { display: inline-block; margin: 1px 6px 1px 0; padding: 0 6px; line-height: 20px; border-radius: 4px; white-space: nowrap; color: var(--ot-text); background: var(--ot-grid); }
-  .ot-label-key { margin-right: 4px; font-size: 0.85em; color: var(--ot-text-muted); }
+  .ot-metric-stats dd { margin: 0; font-size: 1.4em; font-weight: 600; white-space: nowrap; color: var(--ot-text); }
+
+  .ot-metric-charts { --ot-p50: #85b8ff; --ot-p95: #1d7afc; --ot-p99: #09326c;
+                      display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 16px; margin-bottom: 16px; }
+  .ot-metric-charts .ot-chart { margin: 0; }
+  .ot-metric-charts .ot-chart-plot { height: 220px; }
+
+  table.ot-series th.ot-series-name, table.ot-series td.ot-series-name { text-align: left; white-space: nowrap; }
+  table.ot-series .ot-number, table.ot-series .ot-impact { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.ot-series tr:has(input:checked) td { background: var(--ot-accent-soft); }
+  .ot-meter { display: inline-block; width: 64px; height: 6px; margin-right: 8px; vertical-align: middle; border-radius: 3px; overflow: hidden; background: var(--ot-grid); }
+  .ot-meter span { display: block; height: 100%; border-radius: 3px; background: var(--ot-accent); }
+  .ot-label { display: inline-block; padding: 0 6px; line-height: 20px; border-radius: 4px; white-space: nowrap; color: var(--ot-text); background: var(--ot-grid); }
   .ot-label.ot-status-2xx, .ot-label.ot-status-3xx { color: var(--ot-success-text); background: var(--ot-success-soft); }
   .ot-label.ot-status-4xx { color: var(--ot-warning-text); background: var(--ot-warning-soft); }
   .ot-label.ot-status-5xx { color: var(--ot-error); background: var(--ot-error-soft); }
 </style>
 
 <%= javascript_tag type: 'module' do %>
-  const canvas = document.getElementById('ot-metric-chart');
-  if (canvas) import('chart.js').then(({ default: Chart }) => {
-    const points = JSON.parse(canvas.dataset.points);
-    const labels = JSON.parse(canvas.dataset.labels);
-    const { shape, unit } = canvas.dataset;
-    const style = getComputedStyle(canvas);
+  const root = document.getElementById('ot-metric-charts');
+  if (root) import('chart.js').then(({ default: Chart }) => {
+    const points = JSON.parse(root.dataset.points);
+    const labels = JSON.parse(root.dataset.labels);
+    const { shape, unit } = root.dataset;
+    const style = getComputedStyle(root);
     const color = (name) => style.getPropertyValue(name).trim();
     const xs = points.map((p) => p.x);
     const lang = document.documentElement.lang || undefined;
-    const clock = { timeZone: canvas.dataset.zone || undefined, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
+    const clock = { timeZone: root.dataset.zone || undefined, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
     const day = { month: 'short', day: 'numeric' };
     const tick = new Intl.DateTimeFormat(lang, xs[xs.length - 1] - xs[0] < 86400000 ? clock : Object.assign({}, clock, day));
     const fullTime = new Intl.DateTimeFormat(lang, Object.assign({}, clock, day));
+    const compact = new Intl.NumberFormat(lang, { notation: 'compact', maximumFractionDigits: 2 });
+    const number = (v) => (+v.toFixed(2)).toLocaleString(lang);
     const duration = (ms) => ms === 0 ? '0' : ms >= 1000 ? `${+(ms / 1000).toFixed(2)} s` : `${+ms.toFixed(ms < 10 ? 2 : 1)} ms`;
     const bytes = (b) => b >= 1073741824 ? `${+(b / 1073741824).toFixed(2)} GB` : b >= 1048576 ? `${+(b / 1048576).toFixed(1)} MB` : `${+(b / 1024).toFixed(1)} KB`;
-    const format = (v) => v == null ? '' : unit === 's' ? duration(v * 1000) : unit === 'ms' ? duration(v)
-      : unit === 'By' ? bytes(v) : (+v.toFixed(2)).toLocaleString(lang);
-    const line = (key, name, dashed) => ({
-      type: 'line', label: labels[key], data: points.map((p) => p[key]), yAxisID: 'y', order: 1,
-      borderColor: color(name), backgroundColor: color(name), borderWidth: 2, borderDash: dashed ? [4, 3] : [],
-      pointStyle: 'line', pointRadius: 0, pointHitRadius: 6, tension: 0.2, spanGaps: false
-    });
-    const bar = (key, name, axis) => ({
-      type: 'bar', label: labels[key], data: points.map((p) => p[key]), yAxisID: axis, order: 2,
-      backgroundColor: color(name), hoverBackgroundColor: color(name), pointStyle: 'rect', barPercentage: 1, categoryPercentage: 0.9
-    });
-    const datasets = shape === 'histogram' ? [line('average', '--ot-accent'), line('max', '--ot-warning-text', true), bar('count', '--ot-accent-soft', 'count')]
-      : shape === 'sum' ? [bar('total', '--ot-accent', 'y')]
-      : [line('average', '--ot-accent'), line('max', '--ot-warning-text', true)];
-    const scales = {
-      x: { grid: { display: false }, border: { color: color('--ot-line') },
-           ticks: { maxTicksLimit: 8, maxRotation: 0, autoSkipPadding: 12, callback: (value) => tick.format(xs[value]) } },
-      y: { beginAtZero: true, grace: '10%', border: { display: false }, grid: { color: color('--ot-grid'), drawTicks: false },
-           ticks: { maxTicksLimit: 5, padding: 8, callback: format } }
-    };
-    if (shape === 'histogram') {
-      scales.count = { position: 'right', beginAtZero: true, grace: '10%', border: { display: false }, grid: { display: false },
-                       ticks: { maxTicksLimit: 5, precision: 0 } };
-    }
+    const value = (v) => unit === 's' ? duration(v * 1000) : unit === 'ms' ? duration(v) : unit === 'By' ? bytes(v) : number(v);
+    const keyStyle = (dataset) => dataset.type === 'line' && dataset.borderWidth ? 'line' : 'rect';
+    const isolated = ({ dataset: { data }, dataIndex: i }) => data[i] != null && data[i - 1] == null && data[i + 1] == null;
+    const line = (key, name, extra) => Object.assign({
+      type: 'line', label: labels[key], data: points.map((p) => p[key] ?? null), format: value,
+      borderColor: color(name), backgroundColor: color(name), borderWidth: 2, borderCapStyle: 'round', borderJoinStyle: 'round',
+      pointRadius: (context) => isolated(context) ? 3 : 0, pointHoverRadius: 4, pointHoverBorderWidth: 2,
+      pointHoverBorderColor: color('--ot-surface'), pointHitRadius: 12, tension: 0.2
+    }, extra);
+    const bar = (key, name, extra) => Object.assign({
+      type: 'bar', label: labels[key], data: points.map((p) => p[key] || null), format: number,
+      backgroundColor: color(name), hoverBackgroundColor: color(`${name}-hover`),
+      maxBarThickness: 24, borderRadius: 4, borderSkipped: 'start', categoryPercentage: 0.8, barPercentage: 0.9
+    }, extra);
     Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
     Chart.defaults.color = color('--ot-text-muted');
 
-    new Chart(canvas, {
-      type: 'bar',
-      data: { labels: xs, datasets },
-      options: {
-        maintainAspectRatio: false,
-        animation: { duration: 250 },
-        interaction: { mode: 'index', intersect: false },
-        scales,
-        plugins: {
-          legend: { position: 'bottom', align: 'end', labels: { usePointStyle: true, boxWidth: 18, boxHeight: 10 } },
-          tooltip: {
-            backgroundColor: color('--ot-text'), titleColor: '#fff', bodyColor: color('--ot-line'),
-            padding: 10, cornerRadius: 6, caretSize: 5, boxPadding: 4,
-            filter: (item) => item.raw != null,
-            callbacks: {
-              title: (items) => fullTime.format(xs[items[0].dataIndex]),
-              label: (item) => `${item.dataset.label}: ${item.dataset.yAxisID === 'count' ? item.raw.toLocaleString(lang) : format(item.raw)}`
-            }
-          }
-        }
-      }
+    const charts = [];
+    const hover = (index) => charts.forEach((chart) => {
+      if (chart.$hover === index) return;
+      chart.$hover = index;
+      chart.draw();
     });
+    const crosshair = {
+      id: 'crosshair',
+      afterDatasetsDraw(chart) {
+        if (chart.$hover == null) return;
+        const { ctx, chartArea: { top, bottom } } = chart;
+        const x = chart.scales.x.getPixelForValue(chart.$hover);
+        ctx.save();
+        ctx.strokeStyle = color('--ot-text-muted');
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, bottom);
+        ctx.stroke();
+        ctx.restore();
+      }
+    };
+    const endLabels = {
+      id: 'endLabels',
+      afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        const taken = [];
+        ctx.save();
+        ctx.font = `12px ${Chart.defaults.font.family}`;
+        ctx.fillStyle = color('--ot-text-subtle');
+        ctx.textBaseline = 'middle';
+        chart.data.datasets.map((dataset, i) => [dataset, i]).reverse().forEach(([dataset, i]) => {
+          const last = dataset.data.findLastIndex((v) => v != null);
+          if (!dataset.endLabel || last < 0 || !chart.isDatasetVisible(i)) return;
+          const { x, y } = chart.getDatasetMeta(i).data[last];
+          if (taken.some((other) => Math.abs(other - y) < 14)) return;
+          taken.push(y);
+          ctx.fillText(dataset.label, x + 6, y);
+        });
+        ctx.restore();
+      }
+    };
+    const legendItems = (chart) => Chart.defaults.plugins.legend.labels.generateLabels(chart).flatMap((item) => {
+      const dataset = chart.data.datasets[item.datasetIndex];
+      return dataset.legend === false ? [] : [Object.assign(item, { text: dataset.legend || item.text, pointStyle: keyStyle(dataset) })];
+    });
+
+    const draw = (id, datasets, axis, stacked) => {
+      const canvas = document.getElementById(id);
+      charts.push(new Chart(canvas, {
+        type: 'bar',
+        data: { labels: xs, datasets },
+        plugins: [crosshair, endLabels],
+        options: {
+          maintainAspectRatio: false,
+          animation: { duration: 250 },
+          interaction: { mode: 'index', intersect: false },
+          layout: { padding: { top: 4, right: datasets.some((d) => d.endLabel) ? 32 : 4 } },
+          scales: {
+            x: { stacked, grid: { display: false }, border: { color: color('--ot-line') },
+                 ticks: { maxTicksLimit: 6, maxRotation: 0, autoSkipPadding: 12, callback: (i) => tick.format(xs[i]) } },
+            y: { stacked, beginAtZero: true, grace: '10%', border: { display: false }, grid: { color: color('--ot-grid'), drawTicks: false },
+                 ticks: { maxTicksLimit: 5, padding: 8, callback: axis } }
+          },
+          plugins: {
+            legend: { display: datasets.length > 1, position: 'top', align: 'end',
+                      labels: { usePointStyle: true, boxWidth: 18, boxHeight: 10, generateLabels: legendItems } },
+            tooltip: {
+              backgroundColor: color('--ot-text'), titleColor: '#fff', bodyColor: color('--ot-line'),
+              padding: 10, cornerRadius: 6, caretSize: 5, boxPadding: 4, usePointStyle: true,
+              filter: (item) => item.raw != null,
+              callbacks: {
+                title: (items) => fullTime.format(xs[items[0].dataIndex]),
+                label: (item) => `${item.dataset.format(item.raw)}  ${item.dataset.label}`,
+                labelPointStyle: (item) => ({ pointStyle: keyStyle(item.dataset), rotation: 0 })
+              }
+            }
+          },
+          onHover: (event, items) => hover(items.length ? items[0].index : null)
+        }
+      }));
+      canvas.addEventListener('mouseleave', () => hover(null));
+    };
+
+    if (shape === 'histogram') {
+      const percentiles = 'p50' in points[0];
+      draw('ot-duration-chart', percentiles ? ['p50', 'p95', 'p99'].map((key) => line(key, `--ot-${key}`, { endLabel: true }))
+                                            : [line('average', '--ot-p95', { endLabel: true }), line('max', '--ot-p99', { endLabel: true })], value, false);
+    }
+    if (shape === 'gauge') {
+      draw('ot-value-chart', [
+        line('average', '--ot-accent'),
+        line('max', '--ot-accent', { borderWidth: 0, pointRadius: 0, pointHoverRadius: 0, fill: '+1', backgroundColor: color('--ot-accent-soft'), legend: labels.range }),
+        line('min', '--ot-accent', { borderWidth: 0, pointRadius: 0, pointHoverRadius: 0, legend: false })
+      ], value, false);
+    } else {
+      const failed = 'errors' in points[0];
+      draw('ot-rate-chart', failed ? [bar('ok', '--ot-accent', { data: points.map((p) => p.rate - p.errors || null) }), bar('errors', '--ot-error')]
+                                   : [bar('rate', '--ot-accent')], (v) => compact.format(v), failed);
+    }
   });
 <% end %>
