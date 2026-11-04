@@ -1,5 +1,5 @@
 <%
-  destinations = RedmineOpentelemetry::Destinations
+  destinations = RedmineOtel::Destinations
   signal_labels = destinations::SIGNALS.index_with { l(:"label_ot_#{_1}") }
   destination_options = Array(settings['destinations']).reject(&:blank?).map do |text|
     row = destinations::Row.parse(text)
@@ -8,10 +8,10 @@
     label += '  |  ****' if row.headers.present?
     [label, text]
   end
-  log_files = RedmineOpentelemetry.log_files.map { _1.delete_prefix("#{Rails.root}/") }.join(', ')
+  log_files = RedmineOtel.log_files.map { _1.delete_prefix("#{Rails.root}/") }.join(', ')
 %>
 
-<% unless RedmineOpentelemetry.pipelines %>
+<% unless RedmineOtel.pipelines %>
   <div class="flash warning"><%= l(:text_ot_not_loaded) %></div>
 <% end %>
 
@@ -23,8 +23,8 @@
     <%= check_box_tag 'settings[store_traces]', '1', settings['store_traces'] == '1', id: 'settings_store_traces' %>
     <span class="ot-store-option">
       <label class="inline" for="settings_traces_retention_days"><%= l(:label_ot_keep_for) %></label>
-      <%= number_field_tag 'settings[traces_retention_days]', RedmineOpentelemetry.retention_days('traces'), min: 1, max: 365,
-            placeholder: RedmineOpentelemetry::RETENTION_DAYS, id: 'settings_traces_retention_days', class: 'ot-days' %>
+      <%= number_field_tag 'settings[traces_retention_days]', RedmineOtel.retention_days('traces'), min: 1, max: 365,
+            placeholder: RedmineOtel::RETENTION_DAYS, id: 'settings_traces_retention_days', class: 'ot-days' %>
       <%= l(:label_day_plural) %>
     </span>
   </p>
@@ -34,8 +34,8 @@
     <%= check_box_tag 'settings[store_logs]', '1', settings['store_logs'] == '1', id: 'settings_store_logs' %>
     <span class="ot-store-option">
       <label class="inline" for="settings_logs_retention_days"><%= l(:label_ot_keep_for) %></label>
-      <%= number_field_tag 'settings[logs_retention_days]', RedmineOpentelemetry.retention_days('logs'), min: 1, max: 365,
-            placeholder: RedmineOpentelemetry::RETENTION_DAYS, id: 'settings_logs_retention_days', class: 'ot-days' %>
+      <%= number_field_tag 'settings[logs_retention_days]', RedmineOtel.retention_days('logs'), min: 1, max: 365,
+            placeholder: RedmineOtel::RETENTION_DAYS, id: 'settings_logs_retention_days', class: 'ot-days' %>
       <%= l(:label_day_plural) %>
     </span>
   </p>
@@ -53,8 +53,8 @@
     <%= check_box_tag 'settings[store_metrics]', '1', settings['store_metrics'] == '1', id: 'settings_store_metrics' %>
     <span class="ot-store-option">
       <label class="inline" for="settings_metrics_retention_days"><%= l(:label_ot_keep_for) %></label>
-      <%= number_field_tag 'settings[metrics_retention_days]', RedmineOpentelemetry.retention_days('metrics'), min: 1, max: 365,
-            placeholder: RedmineOpentelemetry::RETENTION_DAYS, id: 'settings_metrics_retention_days', class: 'ot-days' %>
+      <%= number_field_tag 'settings[metrics_retention_days]', RedmineOtel.retention_days('metrics'), min: 1, max: 365,
+            placeholder: RedmineOtel::RETENTION_DAYS, id: 'settings_metrics_retention_days', class: 'ot-days' %>
       <%= l(:label_day_plural) %>
     </span>
   </p>

@@ -3,7 +3,7 @@
 require 'json'
 require_relative 'database_writer'
 
-module RedmineOpentelemetry
+module RedmineOtel
   # Saves metric points to ot_metrics for the Metrics tab.
   class DatabaseMetricExporter
     include DatabaseWriter
@@ -16,7 +16,7 @@ module RedmineOpentelemetry
       write(OtMetric, rows, :recorded_at, :metrics) unless rows.empty?
       OpenTelemetry::SDK::Metrics::Export::SUCCESS
     rescue StandardError => e
-      OpenTelemetry.handle_error(exception: e, message: 'redmine_opentelemetry: could not save metrics')
+      OpenTelemetry.handle_error(exception: e, message: 'redmine_otel: could not save metrics')
       OpenTelemetry::SDK::Metrics::Export::FAILURE
     end
 

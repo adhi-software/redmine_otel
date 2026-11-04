@@ -9,7 +9,7 @@ require_relative 'instruments'
 require_relative 'log_bridge'
 
 # Plugin settings and the tracing objects the initializer sets up; those stay nil without it.
-module RedmineOpentelemetry
+module RedmineOtel
   RETENTION_DAYS = 3
   # Marks a span that starts a trace for background work; see RootFilter.
   BACKGROUND_JOB = 'background.job'
@@ -24,9 +24,9 @@ module RedmineOpentelemetry
     # Log files LogFileMute can stop; none when Redmine logs to STDOUT.
     def log_files = @log_files || []
 
-    def tracer = OpenTelemetry.tracer_provider.tracer('redmine_opentelemetry')
+    def tracer = OpenTelemetry.tracer_provider.tracer('redmine_otel')
 
-    def settings = Setting.plugin_redmine_opentelemetry || {}
+    def settings = Setting.plugin_redmine_otel || {}
 
     def store_traces? = settings['store_traces'] == '1'
 
@@ -65,14 +65,14 @@ module RedmineOpentelemetry
 
       OpenTelemetry.tracer_provider.sampler = pipelines[:traces].empty? ? OpenTelemetry::SDK::Trace::Samplers::ALWAYS_OFF : sampler
     rescue StandardError => e
-      Rails.logger.warn("redmine_opentelemetry: could not apply settings: #{e.message}")
+      Rails.logger.warn("redmine_otel: could not apply settings: #{e.message}")
     end
   end
 
   # Settings are re-checked on each request, so every process picks up changes.
   module SettingCachePatch
     def check_cache
-      super.tap { RedmineOpentelemetry.apply_settings }
+      super.tap { RedmineOtel.apply_settings }
     end
   end
 
@@ -126,7 +126,7 @@ module RedmineOpentelemetry
 
       path, line = callable.source_location
       attributes = { BACKGROUND_JOB => 'rufus', 'rufus.schedule' => original.to_s, 'code.filepath' => path, 'code.lineno' => line }.compact
-      RedmineOpentelemetry.tracer.in_span(path ? "Rufus #{File.basename(path)}:#{line}" : 'Rufus job', attributes: attributes) { super }
+      RedmineOtel.tracer.in_span(path ? "Rufus #{File.basename(path)}:#{line}" : 'Rufus job', attributes: attributes) { super }
     end
   end
 
@@ -134,7 +134,7 @@ module RedmineOpentelemetry
   module AgentRunTracing
     def run(agent, stamp)
       attributes = { BACKGROUND_JOB => 'redmine_agent', 'agent.key' => agent['key'].to_s, 'agent.stamp' => stamp.to_s }
-      RedmineOpentelemetry.tracer.in_span('RedmineAgent run', attributes: attributes) { super }
+      RedmineOtel.tracer.in_span('RedmineAgent run', attributes: attributes) { super }
     end
   end
 
@@ -162,7 +162,7 @@ module RedmineOpentelemetry
       span.set_attribute('db.statement', OpenTelemetry::Helpers::SqlProcessor.obfuscate_sql(payload[:sql].to_s, adapter: dialect)) if span.recording?
       payload[:ot_span] = span
     rescue StandardError => e
-      OpenTelemetry.handle_error(exception: e, message: 'redmine_opentelemetry: could not trace a query')
+      OpenTelemetry.handle_error(exception: e, message: 'redmine_otel: could not trace a query')
     end
 
     def finish(_name, _id, payload)
@@ -173,14 +173,14 @@ module RedmineOpentelemetry
       end
       span.finish
     rescue StandardError => e
-      OpenTelemetry.handle_error(exception: e, message: 'redmine_opentelemetry: could not trace a query')
+      OpenTelemetry.handle_error(exception: e, message: 'redmine_otel: could not trace a query')
     end
   end
 
   # Loads config/initializers/opentelemetry.rb with Redmine's; Bundler requires this file via the Gemfile.
   class Railtie < Rails::Railtie
     config.before_initialize do |app|
-      app.paths['config/initializers'] << File.join(app.config.redmine_plugins_directory, 'redmine_opentelemetry/config/initializers')
+      app.paths['config/initializers'] << File.join(app.config.redmine_plugins_directory, 'redmine_otel/config/initializers')
     end
   end
 end

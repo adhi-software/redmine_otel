@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module RedmineOpentelemetry
+module RedmineOtel
   # A Rails.logger broadcast that turns each log line into an OpenTelemetry log record of the
   # current trace; at OFF it records nothing.
   class LogBridge < ActiveSupport::Logger
@@ -10,7 +10,7 @@ module RedmineOpentelemetry
 
     def initialize
       super(nil, level: OFF)
-      @otel_logger = OpenTelemetry.logger_provider.logger(name: 'redmine_opentelemetry')
+      @otel_logger = OpenTelemetry.logger_provider.logger(name: 'redmine_otel')
     end
 
     # Never raises or logs, since it runs inside every Rails.logger call.
@@ -23,7 +23,7 @@ module RedmineOpentelemetry
       return true if body.empty?
 
       name = LEVEL_NAMES[severity]
-      @otel_logger.on_emit(timestamp: Time.now, severity_number: RedmineOpentelemetry::LOG_LEVELS[name],
+      @otel_logger.on_emit(timestamp: Time.now, severity_number: RedmineOtel::LOG_LEVELS[name],
                            severity_text: name&.upcase || 'UNKNOWN', body: body, attributes: exception_attributes(message))
       true
     rescue StandardError
@@ -52,11 +52,11 @@ module RedmineOpentelemetry
   # is set they write nothing but keep their level, so the bridge still gets each line.
   module LogFileMute
     def add(severity, message = nil, progname = nil)
-      RedmineOpentelemetry.log_files_off ? true : super
+      RedmineOtel.log_files_off ? true : super
     end
 
     def <<(message)
-      super unless RedmineOpentelemetry.log_files_off
+      super unless RedmineOtel.log_files_off
     end
 
     # Returns the paths of the broadcasts it extends.

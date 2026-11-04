@@ -3,7 +3,7 @@
 require 'json'
 require_relative 'database_writer'
 
-module RedmineOpentelemetry
+module RedmineOtel
   # Saves spans to ot_spans for the Traces tab.
   class DatabaseExporter
     include DatabaseWriter
@@ -14,7 +14,7 @@ module RedmineOpentelemetry
       write(OtSpan, span_data.map { row(_1) }, :started_at, :traces)
       OpenTelemetry::SDK::Trace::Export::SUCCESS
     rescue StandardError => e
-      OpenTelemetry.handle_error(exception: e, message: 'redmine_opentelemetry: could not save spans')
+      OpenTelemetry.handle_error(exception: e, message: 'redmine_otel: could not save spans')
       OpenTelemetry::SDK::Trace::Export::FAILURE
     end
 

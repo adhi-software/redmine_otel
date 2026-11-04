@@ -1,5 +1,5 @@
 # Also loads the Railtie that starts tracing with Rails.
-gem 'opentelemetry-sdk', require: ['opentelemetry-sdk', File.expand_path('lib/redmine_opentelemetry', __dir__)]
+gem 'opentelemetry-sdk', require: ['opentelemetry-sdk', File.expand_path('lib/redmine_otel', __dir__)]
 gem 'opentelemetry-exporter-otlp'
 gem 'opentelemetry-exporter-zipkin'
 gem 'opentelemetry-instrumentation-rails'

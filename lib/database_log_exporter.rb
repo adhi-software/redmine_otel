@@ -3,7 +3,7 @@
 require 'json'
 require_relative 'database_writer'
 
-module RedmineOpentelemetry
+module RedmineOtel
   # Saves log records to ot_logs for the Logs tab.
   class DatabaseLogExporter
     include DatabaseWriter
@@ -14,7 +14,7 @@ module RedmineOpentelemetry
       write(OtLog, log_records.map { row(_1) }, :logged_at, :logs) unless log_records.empty?
       OpenTelemetry::SDK::Logs::Export::SUCCESS
     rescue StandardError => e
-      OpenTelemetry.handle_error(exception: e, message: 'redmine_opentelemetry: could not save log records')
+      OpenTelemetry.handle_error(exception: e, message: 'redmine_otel: could not save log records')
       OpenTelemetry::SDK::Logs::Export::FAILURE
     end
 

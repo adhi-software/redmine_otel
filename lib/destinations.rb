@@ -3,7 +3,7 @@
 require 'json'
 require 'uri'
 
-module RedmineOpentelemetry
+module RedmineOtel
   # Export destinations, saved as JSON rows of name, format, endpoint, headers and the logs and metrics flags.
   module Destinations
     SIGNALS = [:traces, :logs, :metrics].freeze

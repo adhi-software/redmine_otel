@@ -2,7 +2,7 @@
 
 require_relative 'destinations'
 
-module RedmineOpentelemetry
+module RedmineOtel
   # Sends one signal to every destination that takes it: spans and log records through a batch
   # processor per destination, metrics to each destination's exporter. #update swaps them live.
   class ExportPipeline
@@ -50,7 +50,7 @@ module RedmineOpentelemetry
       Destinations.target(row, @signal)
     rescue StandardError => e
       # Never the whole text: its headers hold API keys.
-      OpenTelemetry.handle_error(exception: e, message: "redmine_opentelemetry: skipped #{@signal} destination #{row&.name.presence || row&.format}")
+      OpenTelemetry.handle_error(exception: e, message: "redmine_otel: skipped #{@signal} destination #{row&.name.presence || row&.format}")
       nil
     end
 

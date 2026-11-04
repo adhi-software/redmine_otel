@@ -3,7 +3,7 @@
 # A log line saved by DatabaseLogExporter; trace_id links it to the request that logged it.
 class OtLog < ApplicationRecord
   def level
-    RedmineOpentelemetry::LOG_LEVELS.reverse_each.find { |_, number| severity_number >= number }&.first || 'unknown'
+    RedmineOtel::LOG_LEVELS.reverse_each.find { |_, number| severity_number >= number }&.first || 'unknown'
   end
 
   def summary = body.to_s.lstrip.lines.first.to_s.strip.truncate(500)

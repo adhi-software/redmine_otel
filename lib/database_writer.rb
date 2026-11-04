@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module RedmineOpentelemetry
+module RedmineOtel
   # Saves an exporter's rows, and hourly deletes rows older than the retention days of their signal.
   module DatabaseWriter
     MAX_VALUE_LENGTH = 4_000
@@ -24,7 +24,7 @@ module RedmineOpentelemetry
       return if now < (@next_cleanup ||= 0)
 
       @next_cleanup = now + CLEANUP_INTERVAL
-      model.where(time_column => ...RedmineOpentelemetry.retention_days(signal).days.ago)
+      model.where(time_column => ...RedmineOtel.retention_days(signal).days.ago)
            .in_batches(of: 10_000).delete_all
     end
 

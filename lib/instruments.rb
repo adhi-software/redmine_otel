@@ -2,7 +2,7 @@
 
 require 'etc'
 
-module RedmineOpentelemetry
+module RedmineOtel
   # Records request, SQL and process metrics, which DatabaseMetricExporter saves each minute.
   module Instruments
     # Histogram bucket bounds, in seconds.
@@ -20,7 +20,7 @@ module RedmineOpentelemetry
         meter_provider.add_view('db.client.operation.duration',
                                 aggregation: histogram.new(aggregation_temporality: :delta, boundaries: QUERY_BOUNDS))
 
-        meter = meter_provider.meter('redmine_opentelemetry')
+        meter = meter_provider.meter('redmine_otel')
         requests = meter.create_histogram('http.server.request.duration', unit: 's',
                                           description: 'Time to handle a request, per controller action')
         queries = meter.create_histogram('db.client.operation.duration', unit: 's', description: 'Time of a SQL query')
@@ -34,10 +34,10 @@ module RedmineOpentelemetry
         end
 
         ActiveSupport::Notifications.monotonic_subscribe('process_action.action_controller') do |_name, start, finish, _id, payload|
-          requests.record(finish - start, attributes: request_attributes(payload)) if RedmineOpentelemetry.record_metrics
+          requests.record(finish - start, attributes: request_attributes(payload)) if RedmineOtel.record_metrics
         end
         ActiveSupport::Notifications.monotonic_subscribe('sql.active_record') do |_name, start, finish, _id, payload|
-          next unless RedmineOpentelemetry.record_metrics
+          next unless RedmineOtel.record_metrics
           next if payload[:cached] || SKIPPED_QUERIES.include?(payload[:name]) || OpenTelemetry::Common::Utilities.untraced?
 
           queries.record(finish - start, attributes: query_attributes(payload))

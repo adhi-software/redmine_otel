@@ -29,7 +29,7 @@ class OtLogsController < OtBaseController
 
   def filtered_logs
     scope = OtLog.all
-    lowest = RedmineOpentelemetry::LOG_LEVELS[params[:level]]
+    lowest = RedmineOtel::LOG_LEVELS[params[:level]]
     scope = scope.where(severity_number: lowest..) if lowest
     from, to = period_range
     scope = scope.where(logged_at: from..to) if from || to
