@@ -23,18 +23,27 @@
   <p class="nodata"><%= l(:label_no_data) %></p>
 <% else %>
   <div class="ot-results-header">
+    <label class="ot-select-all" title="<%= l(:button_check_all) %> / <%= l(:button_uncheck_all) %>">
+      <input type="checkbox" id="ot-select-all" aria-label="<%= l(:button_check_all) %>">
+    </label>
     <strong><%= l(:label_ot_x_logs, count: @log_count) %></strong>
-    <%= delete_link ot_logs_path(filter_params), { class: 'icon icon-del ot-delete',
-                    data: { confirm: l(:text_ot_delete_logs, count: @log_count) } }, l(:label_ot_delete_all) %>
+    <%= delete_link ot_logs_path(filter_params), { id: 'ot-delete', class: 'icon icon-del ot-delete',
+                    data: { confirm: l(:text_ot_delete_logs, count: @log_count),
+                            selected_label: l(:label_ot_delete_selected),
+                            selected_confirm: l(:text_ot_delete_selected_logs) } }, l(:label_ot_delete_all) %>
     <label>
       <%= l(:label_sort) %>:
       <%= select_tag 'sort', ot_log_sort_options(@sort_criteria.to_param), form: 'ot-search', onchange: 'this.form.submit();' %>
     </label>
   </div>
+  <%= render 'opentelemetry/delete_selected', url: ot_logs_path(filter_params) %>
 
   <div class="ot-logs">
     <% @logs.each do |log| %>
       <div class="ot-log ot-level-<%= log.level %>" tabindex="0" role="button" aria-expanded="false">
+        <label class="ot-log-check">
+          <%= check_box_tag 'ids[]', log.id, false, id: nil, form: 'ot-delete-selected', 'aria-label': log.summary %>
+        </label>
         <span class="ot-log-time" title="<%= ot_time(log.logged_at) %>"><%= ot_log_time(log.logged_at) %></span>
         <span class="ot-level"><%= log.severity_text.presence || log.level.upcase %></span>
         <span class="ot-log-message"><%= log.summary %><% if log.multiline? %> <span class="ot-more">…</span><% end %></span>
@@ -73,10 +82,12 @@
 
 <style type="text/css">
   .ot-logs { margin-bottom: 12px; background: var(--ot-surface); border-radius: 8px; box-shadow: var(--ot-shadow); overflow: hidden; }
-  .ot-log { display: grid; grid-template-columns: auto 5.5em minmax(0, 1fr) auto; gap: 12px; align-items: baseline;
+  .ot-log { display: grid; grid-template-columns: auto auto 5.5em minmax(0, 1fr) auto; gap: 12px; align-items: baseline;
             padding: 5px 12px; border-bottom: 1px solid var(--ot-grid); cursor: pointer; font-size: 13px; }
   .ot-log:hover, .ot-log:focus-visible { background: var(--ot-surface-subtle); outline: none; }
-  .ot-log.is-open { background: var(--ot-accent-soft); border-bottom-color: transparent; }
+  .ot-log.is-open, .ot-log:has(.ot-log-check input:checked) { background: var(--ot-accent-soft); }
+  .ot-log.is-open { border-bottom-color: transparent; }
+  .ot-log-check { display: flex; align-self: center; }
   .ot-log-time { white-space: nowrap; font-family: monospace; font-size: 12px; color: var(--ot-text-muted); }
   .ot-level { padding: 0 4px; border-radius: 4px; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; color: var(--ot-text-subtle); background: var(--ot-grid); }
   .ot-level-info .ot-level { color: var(--ot-accent); background: var(--ot-accent-soft); }
@@ -98,7 +109,7 @@
 <%= javascript_tag do %>
   $(function () {
     $('.ot-logs').on('click keydown', '.ot-log', function (event) {
-      if ($(event.target).closest('a').length) return;
+      if ($(event.target).closest('a, .ot-log-check').length) return;
       if (event.type === 'keydown') {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();

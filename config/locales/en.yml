@@ -60,7 +60,7 @@ en:
     other: "Delete the %{count} traces matching these filters, on every page? This cannot be undone."
   label_ot_delete_all: Delete all
   label_ot_delete_selected: Delete selected
-  text_ot_delete_selected: Delete the selected traces? This cannot be undone.
+  text_ot_delete_selected_traces: Delete the selected traces? This cannot be undone.
   notice_ot_traces_deleted:
     one: 1 trace deleted.
     other: "%{count} traces deleted."
@@ -94,6 +94,7 @@ en:
   text_ot_delete_logs:
     one: Delete the log line matching these filters? This cannot be undone.
     other: "Delete the %{count} log lines matching these filters, on every page? This cannot be undone."
+  text_ot_delete_selected_logs: Delete the selected log lines? This cannot be undone.
   notice_ot_logs_deleted:
     one: 1 log line deleted.
     other: "%{count} log lines deleted."
@@ -113,6 +114,7 @@ en:
   text_ot_bucket: "Each point covers %{value}."
   text_ot_click_series: Chart this series alone
   text_ot_delete_metric: Delete this metric's data matching these filters? This cannot be undone.
+  text_ot_delete_selected_series: Delete the selected series' data in this period? This cannot be undone.
   notice_ot_metrics_deleted:
     one: 1 data point deleted.
     other: "%{count} data points deleted."

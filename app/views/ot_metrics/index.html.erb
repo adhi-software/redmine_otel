@@ -43,14 +43,21 @@
   </div>
 
   <div class="ot-results-header">
+    <label class="ot-select-all" title="<%= l(:button_check_all) %> / <%= l(:button_uncheck_all) %>">
+      <input type="checkbox" id="ot-select-all" aria-label="<%= l(:button_check_all) %>">
+    </label>
     <strong><%= l(:label_ot_x_series, count: @series_count) %></strong>
-    <%= delete_link ot_metrics_path(filter_params), { class: 'icon icon-del ot-delete',
-                    data: { confirm: l(:text_ot_delete_metric) } }, l(:label_ot_delete_all) %>
+    <%= delete_link ot_metrics_path(filter_params), { id: 'ot-delete', class: 'icon icon-del ot-delete',
+                    data: { confirm: l(:text_ot_delete_metric),
+                            selected_label: l(:label_ot_delete_selected),
+                            selected_confirm: l(:text_ot_delete_selected_series) } }, l(:label_ot_delete_all) %>
   </div>
+  <%= render 'opentelemetry/delete_selected', url: ot_metrics_path(filter_params) %>
   <div class="autoscroll">
     <table class="list ot-series">
       <thead>
         <tr>
+          <th class="checkbox"></th>
           <th class="ot-series-name"><%= l(:label_ot_series) %></th>
           <% stats.each do |label, _| %><th class="ot-number"><%= label %></th><% end %>
         </tr>
@@ -59,6 +66,9 @@
         <% @series.each do |series, summary| %>
           <% query = ot_series_query(series) %>
           <tr class="<%= 'ot-selected' if params[:q].present? && query == params[:q].strip %>">
+            <td class="checkbox">
+              <%= check_box_tag 'ids[]', series, false, id: nil, form: 'ot-delete-selected', 'aria-label': query.presence || series %>
+            </td>
             <td class="ot-series-name">
               <%= link_to ot_series_labels(series), ot_metrics_path(filter_params.merge('q' => query)), title: l(:text_ot_click_series) %>
             </td>
@@ -78,7 +88,7 @@
   .ot-chart-plot.ot-metric-plot { height: 240px; }
   table.ot-series th.ot-series-name, table.ot-series td.ot-series-name { text-align: left; }
   table.ot-series .ot-number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  table.ot-series tr.ot-selected td { background: var(--ot-accent-soft); }
+  table.ot-series tr.ot-selected td, table.ot-series tr:has(input:checked) td { background: var(--ot-accent-soft); }
   table.ot-series a:hover { text-decoration: none; }
   table.ot-series a:hover .ot-label { box-shadow: inset 0 0 0 1px var(--ot-accent); }
   .ot-label { display: inline-block; margin: 1px 6px 1px 0; padding: 0 6px; line-height: 20px; border-radius: 4px; white-space: nowrap; color: var(--ot-text); background: var(--ot-grid); }

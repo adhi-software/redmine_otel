@@ -1,0 +1,32 @@
+<%# +url+ deletes the rows checked with form="ot-delete-selected", sent as ids[]. %>
+<%= form_tag(url, method: :delete, id: 'ot-delete-selected') do %>
+  <%= hidden_field_tag 'ids[]', '', id: nil %>
+<% end %>
+
+<%= javascript_tag do %>
+  $(function () {
+    var boxes = $('input:checkbox[form="ot-delete-selected"]');
+    var deleteLink = $('#ot-delete');
+    var deleteLabel = deleteLink.find('.icon-label');
+    var allLabel = deleteLabel.text();
+    var refresh = function () {
+      var checked = boxes.filter(':checked').length;
+      $('#ot-select-all').prop({ checked: checked > 0 && checked === boxes.length,
+                                 indeterminate: checked > 0 && checked < boxes.length });
+      deleteLabel.text(checked > 0 ? deleteLink.data('selected-label') + ' (' + checked + ')' : allLabel);
+    };
+    boxes.on('change', refresh);
+    $('#ot-select-all').on('change', function () {
+      boxes.prop('checked', this.checked);
+      refresh();
+    });
+    // Stops rails-ujs, which listens on document, from sending its delete-all request.
+    deleteLink.on('click', function (event) {
+      if (!boxes.is(':checked')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (confirm(this.dataset.selectedConfirm)) $('#ot-delete-selected').submit();
+    });
+    refresh();
+  });
+<% end %>

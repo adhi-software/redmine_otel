@@ -19,7 +19,8 @@ class OtLogsController < OtBaseController
   end
 
   def destroy_all
-    count = filtered_logs.in_batches(of: 10_000).delete_all
+    scope = params.key?(:ids) ? OtLog.where(id: Array(params[:ids])) : filtered_logs
+    count = scope.in_batches(of: 10_000).delete_all
     flash[:notice] = l(:notice_ot_logs_deleted, count: count)
     redirect_to ot_logs_path(filter_params)
   end

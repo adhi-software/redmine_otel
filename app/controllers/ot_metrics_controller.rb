@@ -35,7 +35,9 @@ class OtMetricsController < OtBaseController
   end
 
   def destroy_all
-    count = filtered_points(params[:name].to_s).in_batches(of: 10_000).delete_all
+    scope = filtered_points(params[:name].to_s)
+    scope = scope.where(series: Array(params[:ids])) if params.key?(:ids)
+    count = scope.in_batches(of: 10_000).delete_all
     flash[:notice] = l(:notice_ot_metrics_deleted, count: count)
     redirect_to ot_metrics_path(filter_params)
   end

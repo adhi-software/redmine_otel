@@ -63,15 +63,13 @@
     <%= delete_link ot_traces_path(filter_params), { id: 'ot-delete', class: 'icon icon-del ot-delete',
                     data: { confirm: l(:text_ot_delete_traces, count: @trace_count),
                             selected_label: l(:label_ot_delete_selected),
-                            selected_confirm: l(:text_ot_delete_selected) } }, l(:label_ot_delete_all) %>
+                            selected_confirm: l(:text_ot_delete_selected_traces) } }, l(:label_ot_delete_all) %>
     <label>
       <%= l(:label_sort) %>:
       <%= select_tag 'sort', ot_sort_options(@sort_criteria.to_param), form: 'ot-search', onchange: 'this.form.submit();' %>
     </label>
   </div>
-  <%= form_tag(ot_traces_path(filter_params), method: :delete, id: 'ot-delete-selected') do %>
-    <%= hidden_field_tag 'ids[]', '', id: nil %>
-  <% end %>
+  <%= render 'opentelemetry/delete_selected', url: ot_traces_path(filter_params) %>
 
   <% @traces.each do |trace| %>
     <% errors = @error_counts[trace.trace_id].to_i %>
@@ -116,7 +114,6 @@
   .ot-legend-ok { background: var(--ot-accent); }
   .ot-legend-error { background: var(--ot-error); }
 
-  .ot-select-all { display: flex; padding-left: 12px; margin-right: -4px; }
   .ot-trace { display: flex; margin-bottom: 6px; border-radius: 8px; overflow: hidden; background: var(--ot-surface); box-shadow: var(--ot-shadow); transition: box-shadow 0.15s; }
   .ot-trace:hover { box-shadow: 0 4px 8px -2px rgba(9, 30, 66, 0.2), 0 0 1px rgba(9, 30, 66, 0.25); }
   .ot-trace:has(.ot-trace-check input:checked) { box-shadow: 0 0 0 2px var(--ot-accent); }
@@ -136,34 +133,6 @@
   .ot-trace-target { flex: 1 1 120px; min-width: 0; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ot-text-subtle); font-family: monospace; font-size: 0.95em; }
   .ot-trace-when { margin-left: auto; white-space: nowrap; color: var(--ot-text-subtle); font-size: 0.95em; }
 </style>
-
-<%= javascript_tag do %>
-  $(function () {
-    var boxes = $('.ot-trace-check input');
-    var deleteLink = $('#ot-delete');
-    var deleteLabel = deleteLink.find('.icon-label');
-    var allLabel = deleteLabel.text();
-    var refresh = function () {
-      var checked = boxes.filter(':checked').length;
-      $('#ot-select-all').prop({ checked: checked > 0 && checked === boxes.length,
-                                 indeterminate: checked > 0 && checked < boxes.length });
-      deleteLabel.text(checked > 0 ? deleteLink.data('selected-label') + ' (' + checked + ')' : allLabel);
-    };
-    boxes.on('change', refresh);
-    $('#ot-select-all').on('change', function () {
-      boxes.prop('checked', this.checked);
-      refresh();
-    });
-    // Stops rails-ujs, which listens on document, from sending its delete-all request.
-    deleteLink.on('click', function (event) {
-      if (!boxes.is(':checked')) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (confirm(this.dataset.selectedConfirm)) $('#ot-delete-selected').submit();
-    });
-    refresh();
-  });
-<% end %>
 
 <%= javascript_tag type: 'module' do %>
   const canvas = document.getElementById('ot-chart');
