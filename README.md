@@ -1,12 +1,14 @@
 # Redmine OpenTelemetry
 
-Redmine OpenTelemetry is a plugin that helps you understand application performance and troubleshoot slow requests in Redmine and ERPmine. It uses [OpenTelemetry](https://opentelemetry.io) to trace incoming requests, SQL queries and outgoing HTTP calls, showing how each operation contributes to request processing time, and records Redmine's logs and metrics alongside them.
+Redmine OpenTelemetry is an observability plugin for Redmine, including its installed plugins. Built on [OpenTelemetry](https://opentelemetry.io), it traces incoming requests, SQL queries and outgoing HTTP calls, and collects Redmine's logs and metrics, so you can find bottlenecks and investigate issues from one place.
 
-**Administration > Redmine OpenTelemetry** has three tabs:
+## Key Features
 
-- **Traces**: each request or background job, with a waterfall of its SQL queries and HTTP calls.
-- **Logs**: every line Redmine writes to its log, from Redmine's own log level (`config.log_level`), filterable by level, text and time. Each line keeps the trace of the request that wrote it, so a trace links to its log lines and a log line to its trace.
-- **Metrics**: request durations per controller action, SQL query durations, threads, database connections in use and, on Linux, process memory, saved every minute and charted over time.
+Everything is under **Administration > Redmine OpenTelemetry**:
+
+- **Traces**: each request and background job, with a waterfall of its SQL queries and HTTP calls that shows where the time goes.
+- **Logs**: Redmine's application log, filterable by level, text and time. Each entry links to the trace of the request that wrote it.
+- **Metrics**: request durations per controller action, SQL query durations, threads, database connections in use and, on Linux, process memory, collected every minute and charted over time.
 
 ## Installation
 
